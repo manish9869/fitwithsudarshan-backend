@@ -11,6 +11,7 @@ app.use(
             'http://localhost:5173',
             'http://localhost:5174',
             'https://fitwithsudarshan.com',
+            'https://www.fitwithsudarshan.com',
         ],
     })
 );
