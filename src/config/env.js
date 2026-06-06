@@ -21,8 +21,7 @@ export const config = {
     },
 
     // Parse comma-separated origins from env
-    allowedOrigins: (process.env.ALLOWED_ORIGINS || '')
-        .split(',')
-        .map((o) => o.trim())
-        .filter(Boolean),
+    allowedOrigins: process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+        : [], // empty = handled in corsMiddleware
 };
