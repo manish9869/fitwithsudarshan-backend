@@ -8,17 +8,18 @@ import logger from '../config/logger.js';
 // ── CORS ──────────────────────────────────────────────────────────────────────
 export const corsMiddleware = cors({
     origin: (origin, callback) => {
-        // Allow server-to-server requests (no origin) only in dev
-        if (!origin && !config.isProd) return callback(null, true);
+        // Allow no-origin requests in dev (curl, Postman)
+        if (!origin) return callback(null, !config.isProd);
 
-        if (config.allowedOrigins.includes(origin)) {
+        if (!config.allowedOrigins.length || config.allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
 
+        // Return 403, don't throw
         logger.warn(`CORS blocked: ${origin}`);
-        callback(new Error(`Origin not allowed: ${origin}`));
+        callback(null, false);
     },
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: false,
 });
