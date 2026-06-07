@@ -1,7 +1,7 @@
 import { createRazorpayOrder, verifyPaymentSignature } from '../utils/razorpay.js';
 import { validateCreateOrder, validateVerifyPayment } from '../utils/validate.js';
 import logger from '../config/logger.js';
-
+import { generateInvoiceBuffer } from '../services/invoiceService.js';
 // ── POST /api/create-order ────────────────────────────────────────────────────
 export async function createOrder(req, res, next) {
     try {
@@ -76,4 +76,23 @@ export function healthCheck(_req, res) {
         env: process.env.NODE_ENV,
         timestamp: new Date().toISOString(),
     });
+}
+
+
+export function downloadInvoice(req, res, next) {
+    try {
+        const enrollment = req.body;
+        if (!enrollment?.enrollmentId) {
+            return res.status(400).json({ error: 'Invalid enrollment data.' });
+        }
+        const buffer = generateInvoiceBuffer(enrollment);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="RECODE-Invoice-${enrollment.enrollmentId}.pdf"`
+        );
+        res.send(buffer);
+    } catch (err) {
+        next(err);
+    }
 }

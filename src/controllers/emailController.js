@@ -15,6 +15,7 @@ import nodemailer from 'nodemailer';
 import { renderTemplate, TEMPLATE_NAMES } from '../services/emailTemplates.js';
 import { config } from '../config/env.js';
 import logger from '../config/logger.js';
+import { generateInvoiceBuffer } from '../services/invoiceService.js';
 
 // ── Reusable transporter ──────────────────────────────────────────────────────
 let _transporter = null;
@@ -92,10 +93,28 @@ export async function sendEnrollmentEmails(req, res, next) {
       return res.json({ success: true, skipped: true });
     }
 
+    // Generate invoice PDF buffer
+    let invoiceBuffer = null;
+    try {
+      invoiceBuffer = generateInvoiceBuffer(enrollment);
+      logger.info(`[email] ✅ Invoice PDF generated for ${enrollment.enrollmentId}`);
+    } catch (pdfErr) {
+      logger.warn(`[email] ⚠️ Invoice generation failed: ${pdfErr.message}`);
+    }
+
     const transporter = getTransporter();
     const coachEmail = config.email.coachEmail || config.email.gmailUser;
 
+    const invoiceAttachment = invoiceBuffer
+      ? [{
+        filename: `RECODE-Invoice-${enrollment.enrollmentId}.pdf`,
+        content: invoiceBuffer,
+        contentType: 'application/pdf',
+      }]
+      : [];
+
     const [coachResult, customerResult] = await Promise.allSettled([
+      // Coach email — no invoice attachment needed
       (async () => {
         const { subject, html } = renderTemplate('enrollment_coach', enrollment);
         return transporter.sendMail({
@@ -105,6 +124,7 @@ export async function sendEnrollmentEmails(req, res, next) {
           html,
         });
       })(),
+      // Customer email — with invoice attached
       (async () => {
         const { subject, html } = renderTemplate('enrollment_customer', enrollment);
         return transporter.sendMail({
@@ -113,6 +133,7 @@ export async function sendEnrollmentEmails(req, res, next) {
           replyTo: coachEmail,
           subject,
           html,
+          attachments: invoiceAttachment,
         });
       })(),
     ]);
@@ -123,7 +144,7 @@ export async function sendEnrollmentEmails(req, res, next) {
     if (coachOk) logger.info(`[email] ✅ Coach notification → ${coachEmail}`);
     else logger.error(`[email] ❌ Coach email failed: ${coachResult.reason?.message}`);
 
-    if (customerOk) logger.info(`[email] ✅ Customer confirmation → ${enrollment.customerEmail}`);
+    if (customerOk) logger.info(`[email] ✅ Customer confirmation + invoice → ${enrollment.customerEmail}`);
     else logger.error(`[email] ❌ Customer email failed: ${customerResult.reason?.message}`);
 
     return res.json({ success: true, coach: coachOk, customer: customerOk });
