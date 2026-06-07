@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  body{margin:0;padding:0;background:#0a0a0e;font-family:'Segoe UI',Arial,sans-serif;color:#e0e0e0;}
+  .wrap{max-width:600px;margin:32px auto;background:#111118;border-radius:16px;overflow:hidden;border:1px solid rgba(239,68,68,0.2);}
+  .header{padding:36px 36px 28px;text-align:center;background:linear-gradient(135deg,#1a0808 0%,#2d0f0f 100%);}
+  .header h1{margin:0 0 6px;font-size:24px;font-weight:900;color:#f87171;}
+  .header p{margin:0;font-size:13px;color:rgba(255,255,255,0.5);}
+  .body{padding:28px 36px 20px;}
+  .sec{font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#e71763;margin-bottom:12px;}
+  table{width:100%;border-collapse:collapse;margin-bottom:22px;}
+  td{padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13.5px;vertical-align:top;}
+  td.lbl{color:rgba(255,255,255,0.38);width:45%;}
+  td.val{color:#fff;font-weight:600;}
+  .card{background:rgba(231,23,99,0.05);border:1px solid rgba(231,23,99,0.15);border-radius:12px;padding:18px 20px;margin-bottom:22px;}
+  .card ol{margin:8px 0 0;padding-left:18px;}
+  .card li{font-size:13px;color:rgba(255,255,255,0.55);line-height:1.85;}
+  .card li strong{color:#fff;}
+  .btn-row{text-align:center;padding:8px 0 16px;}
+  .btn-pink{display:inline-block;padding:12px 28px;border-radius:10px;font-weight:800;font-size:13px;text-decoration:none;background:#e71763;color:#fff;}
+  .btn-wa{display:inline-block;padding:12px 28px;border-radius:10px;font-weight:800;font-size:13px;text-decoration:none;background:#25D366;color:#fff;margin-top:10px;}
+  .footer{background:#0a0a0e;padding:18px 36px;text-align:center;font-size:11px;color:rgba(255,255,255,0.22);border-top:1px solid rgba(255,255,255,0.06);line-height:1.9;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div style="font-size:36px;margin-bottom:10px;">⚠️</div>
+    <h1>Payment Unsuccessful</h1>
+    <p>No charges have been made to your account.</p>
+  </div>
+  <div class="body">
+    <p style="font-size:18px;font-weight:800;color:#fff;margin:0 0 8px;">Hey {{firstName}},</p>
+    <p style="font-size:13.5px;color:rgba(255,255,255,0.5);line-height:1.75;margin:0 0 20px;">
+      We weren't able to process your payment for the RECODE™ program.
+      <strong style="color:#fff;">Your bank account has not been charged.</strong>
+      This can happen due to insufficient funds, a card limit, or a temporary bank issue.
+    </p>
+    {{#if programName}}
+    <div class="sec">Attempted Enrollment</div>
+    <table>
+      <tr><td class="lbl">Program</td><td class="val">{{programName}}</td></tr>
+    </table>
+    {{/if}}
+    <div class="card">
+      <div class="sec" style="margin-bottom:6px;">Common Reasons</div>
+      <ol>
+        <li><strong>Card declined</strong> — contact your bank to allow the transaction.</li>
+        <li><strong>Insufficient funds</strong> — check your available balance.</li>
+        <li><strong>Card limit reached</strong> — try UPI, net banking, or a different card.</li>
+        <li><strong>Network issue</strong> — ensure a stable connection and retry.</li>
+      </ol>
+    </div>
+    <div class="btn-row">
+      <a href="https://fitwithsudarshan.com/enroll" class="btn-pink">Try Again →</a><br/>
+      <a href="https://wa.me/919619708124" class="btn-wa">Need help? WhatsApp Us</a>
+    </div>
+  </div>
+  <div class="footer">
+    FitWithSudarshan · RECODE™ Transformation Program<br/>
+    Mumbai, India · Fitwithsudarshanofficial@gmail.com · +91 96197 08124
+  </div>
+</div>
+</body>
+</html>

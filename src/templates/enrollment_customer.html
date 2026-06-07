@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  body{margin:0;padding:0;background:#0a0a0e;font-family:'Segoe UI',Arial,sans-serif;color:#e0e0e0;}
+  .wrap{max-width:600px;margin:32px auto;background:#111118;border-radius:16px;overflow:hidden;border:1px solid rgba(231,23,99,0.2);}
+  .header{padding:36px 36px 28px;text-align:center;background:linear-gradient(135deg,#e71763 0%,#c4134f 100%);}
+  .header h1{margin:0 0 6px;font-size:24px;font-weight:900;color:#fff;}
+  .header p{margin:0;font-size:13px;color:rgba(255,255,255,0.7);}
+  .body{padding:28px 36px 20px;}
+  .sec{font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#e71763;margin-bottom:12px;}
+  table{width:100%;border-collapse:collapse;margin-bottom:22px;}
+  td{padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13.5px;vertical-align:top;}
+  td.lbl{color:rgba(255,255,255,0.38);width:45%;}
+  td.val{color:#fff;font-weight:600;}
+  .amount{font-size:24px;font-weight:900;color:#e71763;}
+  .badge-green{display:inline-block;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.28);color:#34d399;font-size:11px;font-weight:700;padding:3px 12px;border-radius:20px;}
+  .mono{font-family:monospace;font-size:12px;}
+  .card{background:rgba(231,23,99,0.05);border:1px solid rgba(231,23,99,0.15);border-radius:12px;padding:18px 20px;margin-bottom:22px;}
+  .card ol{margin:8px 0 0;padding-left:18px;}
+  .card li{font-size:13px;color:rgba(255,255,255,0.55);line-height:1.85;}
+  .card li strong{color:#fff;}
+  .btn-row{text-align:center;padding:8px 0 16px;}
+  .btn-wa{display:inline-block;padding:12px 28px;border-radius:10px;font-weight:800;font-size:13px;text-decoration:none;background:#25D366;color:#fff;}
+  .footer{background:#0a0a0e;padding:18px 36px;text-align:center;font-size:11px;color:rgba(255,255,255,0.22);border-top:1px solid rgba(255,255,255,0.06);line-height:1.9;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>✅ You're Enrolled!</h1>
+    <p>Welcome to the RECODE™ transformation program</p>
+  </div>
+  <div class="body">
+    <p style="font-size:19px;font-weight:800;color:#fff;margin:0 0 8px;">Hey {{firstName}} 👋</p>
+    <p style="font-size:13.5px;color:rgba(255,255,255,0.5);line-height:1.75;margin:0 0 24px;">
+      Your payment is verified and you're officially enrolled.
+      Sudarshan will reach out within <strong style="color:#fff;">24 hours</strong> on WhatsApp to begin your onboarding.
+    </p>
+    <div class="sec">Your Enrollment Summary</div>
+    <table>
+      <tr><td class="lbl">Program</td><td class="val">{{programName}}</td></tr>
+      <tr><td class="lbl">Duration</td><td class="val">{{durationLabel}}</td></tr>
+      <tr><td class="lbl">Plan</td><td class="val">{{planTypeLabel}}</td></tr>
+      <tr><td class="lbl">Enrollment ID</td><td class="val mono">{{enrollmentId}}</td></tr>
+      <tr><td class="lbl">Status</td><td class="val"><span class="badge-green">PAID &amp; VERIFIED</span></td></tr>
+      <tr><td class="lbl">Amount Paid</td><td class="val amount">{{amountFormatted}}</td></tr>
+      <tr><td class="lbl">Payment Date</td><td class="val">{{paymentDate}}</td></tr>
+      <tr><td class="lbl">Payment ID</td><td class="val mono">{{razorpayPaymentId}}</td></tr>
+    </table>
+    <div class="card">
+      <div class="sec" style="margin-bottom:6px;">What Happens Next</div>
+      <ol>
+        <li><strong>Enrollment review</strong> — Sudarshan reviews your details &amp; prepares onboarding.</li>
+        <li><strong>WhatsApp &amp; Email</strong> — Onboarding instructions arrive within 24 hours.</li>
+        <li><strong>Plan creation</strong> — Your personalised workout &amp; nutrition plan is crafted.</li>
+        <li><strong>Begin RECODE™</strong> — Your recovery-based transformation starts from Day 1.</li>
+      </ol>
+    </div>
+    <div class="btn-row">
+      <a href="https://wa.me/919619708124" class="btn-wa">💬 Message Sudarshan on WhatsApp</a>
+    </div>
+  </div>
+  <div class="footer">
+    FitWithSudarshan · RECODE™ Transformation Program<br/>
+    Mumbai, India · Fitwithsudarshanofficial@gmail.com · +91 96197 08124
+  </div>
+</div>
+</body>
+</html>
