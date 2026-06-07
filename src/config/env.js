@@ -19,7 +19,11 @@ export const config = {
         keyId: process.env.RAZORPAY_KEY_ID,
         keySecret: process.env.RAZORPAY_KEY_SECRET,
     },
-
+    email: {
+        gmailUser: process.env.GMAIL_USER || '',
+        gmailAppPassword: process.env.GMAIL_APP_PASSWORD || '',
+        coachEmail: process.env.COACH_EMAIL || process.env.GMAIL_USER || '',
+    },
     // Parse comma-separated origins from env
     allowedOrigins: process.env.ALLOWED_ORIGINS
         ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
