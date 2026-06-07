@@ -1,65 +1,162 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+<meta name="x-apple-disable-message-reformatting"/>
+<title>New Enrollment — FitWithSudarshan Admin</title>
+<!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
 <style>
-  body{margin:0;padding:0;background:#0a0a0e;font-family:'Segoe UI',Arial,sans-serif;color:#e0e0e0;}
-  .wrap{max-width:600px;margin:32px auto;background:#111118;border-radius:16px;overflow:hidden;border:1px solid rgba(231,23,99,0.2);}
-  .header{padding:36px 36px 28px;text-align:center;background:linear-gradient(135deg,#e71763 0%,#c4134f 100%);}
-  .header h1{margin:0 0 6px;font-size:24px;font-weight:900;color:#fff;}
-  .header p{margin:0;font-size:13px;color:rgba(255,255,255,0.7);}
-  .body{padding:28px 36px 20px;}
-  .sec{font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#e71763;margin-bottom:12px;}
-  table{width:100%;border-collapse:collapse;margin-bottom:22px;}
-  td{padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13.5px;vertical-align:top;}
-  td.lbl{color:rgba(255,255,255,0.38);width:45%;}
-  td.val{color:#fff;font-weight:600;}
-  .amount{font-size:24px;font-weight:900;color:#e71763;}
-  .badge-green{display:inline-block;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.28);color:#34d399;font-size:11px;font-weight:700;padding:3px 12px;border-radius:20px;}
-  .mono{font-family:monospace;font-size:12px;}
-  .btn-row{text-align:center;padding:8px 0 16px;}
-  .btn-wa{display:inline-block;padding:12px 28px;border-radius:10px;font-weight:800;font-size:13px;text-decoration:none;background:#25D366;color:#fff;}
-  .footer{background:#0a0a0e;padding:18px 36px;text-align:center;font-size:11px;color:rgba(255,255,255,0.22);border-top:1px solid rgba(255,255,255,0.06);line-height:1.9;}
+*{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
+body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
+table,td{mso-table-lspace:0pt;mso-table-rspace:0pt;}
+img{-ms-interpolation-mode:bicubic;border:0;outline:none;text-decoration:none;display:block;}
+body{margin:0!important;padding:0!important;background-color:#080810;width:100%!important;}
+@media only screen and (max-width:620px){
+  .ec{width:100%!important;}
+  .mp{padding:22px 18px!important;}
+  .mps{padding:12px 18px!important;}
+  .lbl{display:block!important;width:100%!important;}
+  .val{display:block!important;width:100%!important;text-align:left!important;}
+  .hh{font-size:21px!important;}
+  .av{font-size:22px!important;}
+  .bb{display:block!important;width:100%!important;box-sizing:border-box!important;text-align:center!important;margin:0 0 10px!important;}
+}
 </style>
 </head>
-<body>
-<div class="wrap">
-  <div class="header">
-    <h1>🎉 New RECODE™ Enrollment</h1>
-    <p>A new client has enrolled and payment is verified.</p>
-  </div>
-  <div class="body">
-    <div class="sec">Client</div>
-    <table>
-      <tr><td class="lbl">Name</td><td class="val">{{customerName}}</td></tr>
-      <tr><td class="lbl">Email</td><td class="val">{{customerEmail}}</td></tr>
-      <tr><td class="lbl">WhatsApp</td><td class="val">{{customerPhone}}</td></tr>
-    </table>
-    <div class="sec">Enrollment</div>
-    <table>
-      <tr><td class="lbl">Program</td><td class="val">{{programName}}</td></tr>
-      <tr><td class="lbl">Coaching Type</td><td class="val">{{coachingType}}</td></tr>
-      <tr><td class="lbl">Plan</td><td class="val">{{planTypeLabel}}</td></tr>
-      <tr><td class="lbl">Duration</td><td class="val">{{durationLabel}}</td></tr>
-      <tr><td class="lbl">Enrollment ID</td><td class="val mono">{{enrollmentId}}</td></tr>
-      <tr><td class="lbl">Status</td><td class="val"><span class="badge-green">PAID &amp; VERIFIED</span></td></tr>
-    </table>
-    <div class="sec">Payment</div>
-    <table>
-      <tr><td class="lbl">Amount</td><td class="val amount">{{amountFormatted}}</td></tr>
-      <tr><td class="lbl">Payment ID</td><td class="val mono">{{razorpayPaymentId}}</td></tr>
-      <tr><td class="lbl">Order ID</td><td class="val mono">{{razorpayOrderId}}</td></tr>
-      <tr><td class="lbl">Date</td><td class="val">{{paymentDate}}</td></tr>
-    </table>
-    <div class="btn-row">
-      <a href="https://wa.me/{{customerPhoneClean}}" class="btn-wa">💬 Message Client on WhatsApp</a>
-    </div>
-  </div>
-  <div class="footer">
-    FitWithSudarshan · RECODE™ Transformation Program<br/>
-    Mumbai, India · Fitwithsudarshanofficial@gmail.com · +91 96197 08124
-  </div>
-</div>
+<body style="margin:0;padding:0;background-color:#080810;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#080810;padding:28px 14px;">
+<tr><td align="center">
+<table role="presentation" class="ec" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+  <!-- ACCENT TOP -->
+  <tr><td height="3" style="background:linear-gradient(90deg,#e71763,#ff4d8f,#e71763);border-radius:3px 3px 0 0;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+
+  <!-- HEADER -->
+  <tr>
+    <td class="mp" style="background:linear-gradient(160deg,#12020d 0%,#0d0d18 55%,#080810 100%);border-left:1px solid rgba(231,23,99,0.12);border-right:1px solid rgba(231,23,99,0.12);padding:44px 44px 36px;text-align:center;">
+      <!-- LOGO — black bg image blends directly into dark header gradient -->
+      <img src="https://vducmiggraxtqdgt.public.blob.vercel-storage.com/logo.png" alt="FitWithSudarshan" width="160" style="width:160px;height:auto;margin:0 auto 28px;display:block;"/>
+      <!-- BADGE -->
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 20px;">
+        <tr><td style="background:rgba(231,23,99,0.1);border:1px solid rgba(231,23,99,0.32);border-radius:100px;padding:6px 20px;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#e71763;">🎉 &nbsp;New Enrollment Alert</td></tr>
+      </table>
+      <h1 class="hh" style="margin:0 0 10px;font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:700;color:#ffffff;line-height:1.25;letter-spacing:-0.3px;">New Client Enrolled!</h1>
+      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgba(255,255,255,0.45);line-height:1.65;">Payment received &amp; verified. Ready for onboarding.</p>
+    </td>
+  </tr>
+
+  <!-- VERIFIED STRIP -->
+  <tr>
+    <td class="mps" style="background:rgba(52,211,153,0.05);border-left:1px solid rgba(231,23,99,0.12);border-right:1px solid rgba(231,23,99,0.12);border-top:1px solid rgba(52,211,153,0.1);border-bottom:1px solid rgba(52,211,153,0.1);padding:14px 44px;text-align:center;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+        <tr><td style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.28);border-radius:100px;padding:7px 24px;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#34d399;">✓ &nbsp;Payment Verified &amp; Confirmed</td></tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- CLIENT DETAILS -->
+  <tr>
+    <td class="mp" style="background:#0d0d18;border-left:1px solid rgba(231,23,99,0.12);border-right:1px solid rgba(231,23,99,0.12);padding:28px 44px 0;">
+      <p style="margin:0 0 13px;font-family:Arial,Helvetica,sans-serif;font-size:9.5px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#e71763;">Client Details</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#09090f;border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow:hidden;">
+        <tr>
+          <td class="lbl" style="padding:14px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.32);width:40%;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">Full Name</td>
+          <td class="val" style="padding:14px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#fff;font-weight:700;text-align:right;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">{{customerName}}</td>
+        </tr>
+        <tr>
+          <td class="lbl" style="padding:14px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.32);border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">Email</td>
+          <td class="val" style="padding:14px 20px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;"><a href="mailto:{{customerEmail}}" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#e71763;font-weight:700;text-decoration:none;">{{customerEmail}}</a></td>
+        </tr>
+        <tr>
+          <td class="lbl" style="padding:14px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.32);vertical-align:middle;">WhatsApp</td>
+          <td class="val" style="padding:14px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#fff;font-weight:700;text-align:right;vertical-align:middle;">{{customerPhone}}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- ENROLLMENT DETAILS -->
+  <tr>
+    <td class="mp" style="background:#0d0d18;border-left:1px solid rgba(231,23,99,0.12);border-right:1px solid rgba(231,23,99,0.12);padding:22px 44px 0;">
+      <p style="margin:0 0 13px;font-family:Arial,Helvetica,sans-serif;font-size:9.5px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#e71763;">Enrollment Details</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#09090f;border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow:hidden;">
+        <tr>
+          <td class="lbl" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.32);width:40%;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">Program</td>
+          <td class="val" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#fff;font-weight:700;text-align:right;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">{{programName}}</td>
+        </tr>
+        <tr>
+          <td class="lbl" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.32);border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">Coaching Type</td>
+          <td class="val" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#fff;font-weight:700;text-align:right;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">{{coachingType}}</td>
+        </tr>
+        <tr>
+          <td class="lbl" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.32);border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">Plan</td>
+          <td class="val" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#fff;font-weight:700;text-align:right;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">{{planTypeLabel}}</td>
+        </tr>
+        <tr>
+          <td class="lbl" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.32);border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">Duration</td>
+          <td class="val" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#fff;font-weight:700;text-align:right;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">{{durationLabel}}</td>
+        </tr>
+        <tr>
+          <td class="lbl" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.32);border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">Enrollment ID</td>
+          <td class="val" style="padding:13px 20px;font-family:'Courier New',Courier,monospace;font-size:11px;color:rgba(255,255,255,0.5);text-align:right;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">{{enrollmentId}}</td>
+        </tr>
+        <tr>
+          <td class="lbl" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.32);vertical-align:middle;">Status</td>
+          <td class="val" style="padding:13px 20px;text-align:right;vertical-align:middle;"><table role="presentation" cellpadding="0" cellspacing="0" style="display:inline-table;margin-left:auto;"><tr><td style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.28);border-radius:100px;padding:4px 14px;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:700;color:#34d399;">PAID &amp; VERIFIED</td></tr></table></td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- PAYMENT DETAILS -->
+  <tr>
+    <td class="mp" style="background:#0d0d18;border-left:1px solid rgba(231,23,99,0.12);border-right:1px solid rgba(231,23,99,0.12);padding:22px 44px 0;">
+      <p style="margin:0 0 13px;font-family:Arial,Helvetica,sans-serif;font-size:9.5px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#e71763;">Payment Details</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#09090f;border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow:hidden;">
+        <tr>
+          <td class="lbl" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.32);width:40%;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">Payment ID</td>
+          <td class="val" style="padding:13px 20px;font-family:'Courier New',Courier,monospace;font-size:11px;color:rgba(255,255,255,0.42);text-align:right;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">{{razorpayPaymentId}}</td>
+        </tr>
+        <tr>
+          <td class="lbl" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.32);border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">Order ID</td>
+          <td class="val" style="padding:13px 20px;font-family:'Courier New',Courier,monospace;font-size:11px;color:rgba(255,255,255,0.42);text-align:right;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">{{razorpayOrderId}}</td>
+        </tr>
+        <tr>
+          <td class="lbl" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.32);border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">Date</td>
+          <td class="val" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#fff;font-weight:700;text-align:right;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;">{{paymentDate}}</td>
+        </tr>
+        <tr>
+          <td style="padding:18px 20px;background:rgba(231,23,99,0.05);border-top:1px solid rgba(231,23,99,0.1);font-family:Arial,Helvetica,sans-serif;font-size:11.5px;font-weight:700;color:rgba(255,255,255,0.35);letter-spacing:0.5px;">TOTAL RECEIVED</td>
+          <td class="av" style="padding:18px 20px;background:rgba(231,23,99,0.05);border-top:1px solid rgba(231,23,99,0.1);text-align:right;"><span style="font-family:Georgia,'Times New Roman',serif;font-size:30px;font-weight:700;color:#e71763;letter-spacing:-0.5px;">{{amountFormatted}}</span></td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- CTA -->
+  <tr>
+    <td class="mp" style="background:#0d0d18;border-left:1px solid rgba(231,23,99,0.12);border-right:1px solid rgba(231,23,99,0.12);padding:28px 44px 38px;text-align:center;">
+      <p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgba(255,255,255,0.3);line-height:1.6;">Start the client&rsquo;s onboarding journey &mdash; reach out now.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+        <tr><td><a href="https://wa.me/{{customerPhoneClean}}" class="bb" style="display:inline-block;background:#25D366;color:#fff;text-decoration:none;padding:15px 36px;border-radius:10px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:800;letter-spacing:0.2px;">💬 &nbsp;Message Client on WhatsApp</a></td></tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- FOOTER -->
+  <tr>
+    <td class="mps" style="background:#07070e;border:1px solid rgba(255,255,255,0.04);border-top:none;border-radius:0 0 14px 14px;padding:24px 44px;text-align:center;">
+      <img src="https://vducmiggraxtqdgt.public.blob.vercel-storage.com/logo.png" alt="FitWithSudarshan" width="110" style="width:110px;height:auto;display:block;margin:0 auto 12px;opacity:0.45;"/>
+      <p style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:rgba(255,255,255,0.18);letter-spacing:0.5px;">FitWithSudarshan &nbsp;&middot;&nbsp; RECODE™ Transformation Program</p>
+      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.1);">Mumbai, India &nbsp;&middot;&nbsp; Fitwithsudarshanofficial@gmail.com &nbsp;&middot;&nbsp; +91 96197 08124</p>
+    </td>
+  </tr>
+  <tr><td height="3" style="background:linear-gradient(90deg,transparent,#e71763,transparent);font-size:1px;line-height:1px;">&nbsp;</td></tr>
+
+</table>
+</td></tr>
+</table>
 </body>
 </html>
