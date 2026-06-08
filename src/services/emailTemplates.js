@@ -107,7 +107,13 @@ const templateBuilders = {
     welcome(d) {
         const firstName = (d.customerName || 'there').split(' ')[0];
         const subject = `🚀 Your RECODE™ Journey Officially Begins — Welcome, ${firstName}!`;
-        const html = inject(readTemplate('welcome'), { firstName });
+        const html = inject(readTemplate('welcome'), {
+            firstName,
+            programName: d.programName || '—',
+            durationLabel: d.durationMonths ? `${d.durationMonths} Month${d.durationMonths > 1 ? 's' : ''}` : '—',
+            amountFormatted: fmt(d.amountPaid),
+            paymentDate: fmtDate(d.paymentDate),
+        });
         return { subject, html };
     },
 
@@ -116,6 +122,7 @@ const templateBuilders = {
         const subject = `⚠️ Payment Unsuccessful — RECODE™ Enrollment`;
         const html = inject(readTemplate('payment_failed'), {
             firstName,
+            durationLabel: d.durationMonths ? `${d.durationMonths} Month${d.durationMonths > 1 ? 's' : ''}` : '—',
             programName: d.programName || '',
         });
         return { subject, html };
