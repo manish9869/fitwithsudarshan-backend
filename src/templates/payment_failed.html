@@ -1,68 +1,133 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+<meta name="x-apple-disable-message-reformatting"/>
+<title>Payment Unsuccessful — RECODE&#8482;</title>
+<!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
 <style>
-  body{margin:0;padding:0;background:#0a0a0e;font-family:'Segoe UI',Arial,sans-serif;color:#e0e0e0;}
-  .wrap{max-width:600px;margin:32px auto;background:#111118;border-radius:16px;overflow:hidden;border:1px solid rgba(239,68,68,0.2);}
-  .header{padding:36px 36px 28px;text-align:center;background:linear-gradient(135deg,#1a0808 0%,#2d0f0f 100%);}
-  .header h1{margin:0 0 6px;font-size:24px;font-weight:900;color:#f87171;}
-  .header p{margin:0;font-size:13px;color:rgba(255,255,255,0.5);}
-  .body{padding:28px 36px 20px;}
-  .sec{font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#e71763;margin-bottom:12px;}
-  table{width:100%;border-collapse:collapse;margin-bottom:22px;}
-  td{padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13.5px;vertical-align:top;}
-  td.lbl{color:rgba(255,255,255,0.38);width:45%;}
-  td.val{color:#fff;font-weight:600;}
-  .card{background:rgba(231,23,99,0.05);border:1px solid rgba(231,23,99,0.15);border-radius:12px;padding:18px 20px;margin-bottom:22px;}
-  .card ol{margin:8px 0 0;padding-left:18px;}
-  .card li{font-size:13px;color:rgba(255,255,255,0.55);line-height:1.85;}
-  .card li strong{color:#fff;}
-  .btn-row{text-align:center;padding:8px 0 16px;}
-  .btn-pink{display:inline-block;padding:12px 28px;border-radius:10px;font-weight:800;font-size:13px;text-decoration:none;background:#e71763;color:#fff;}
-  .btn-wa{display:inline-block;padding:12px 28px;border-radius:10px;font-weight:800;font-size:13px;text-decoration:none;background:#25D366;color:#fff;margin-top:10px;}
-  .footer{background:#0a0a0e;padding:18px 36px;text-align:center;font-size:11px;color:rgba(255,255,255,0.22);border-top:1px solid rgba(255,255,255,0.06);line-height:1.9;}
+*{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
+body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
+table,td{mso-table-lspace:0pt;mso-table-rspace:0pt;}
+img{-ms-interpolation-mode:bicubic;border:0;outline:none;text-decoration:none;display:block;}
+body{margin:0!important;padding:0!important;background-color:#06060f;width:100%!important;font-family:Arial,Helvetica,sans-serif;}
+@media only screen and (max-width:640px){
+  .ec{width:100%!important;}
+  .mp{padding:24px 18px!important;}
+  .mps{padding:12px 18px!important;}
+  .lbl{display:block!important;width:100%!important;border-right:none!important;}
+  .val{display:block!important;width:100%!important;text-align:left!important;padding-top:2px!important;}
+  .hh{font-size:22px!important;line-height:1.3!important;}
+  .bb{display:block!important;width:100%!important;box-sizing:border-box!important;text-align:center!important;margin:0 0 10px!important;}
+  .bg{display:none!important;}
+}
 </style>
 </head>
-<body>
-<div class="wrap">
-  <div class="header">
-    <div style="font-size:36px;margin-bottom:10px;">⚠️</div>
-    <h1>Payment Unsuccessful</h1>
-    <p>No charges have been made to your account.</p>
-  </div>
-  <div class="body">
-    <p style="font-size:18px;font-weight:800;color:#fff;margin:0 0 8px;">Hey {{firstName}},</p>
-    <p style="font-size:13.5px;color:rgba(255,255,255,0.5);line-height:1.75;margin:0 0 20px;">
-      We weren't able to process your payment for the RECODE™ program.
-      <strong style="color:#fff;">Your bank account has not been charged.</strong>
-      This can happen due to insufficient funds, a card limit, or a temporary bank issue.
-    </p>
-    {{#if programName}}
-    <div class="sec">Attempted Enrollment</div>
-    <table>
-      <tr><td class="lbl">Program</td><td class="val">{{programName}}</td></tr>
-    </table>
-    {{/if}}
-    <div class="card">
-      <div class="sec" style="margin-bottom:6px;">Common Reasons</div>
-      <ol>
-        <li><strong>Card declined</strong> — contact your bank to allow the transaction.</li>
-        <li><strong>Insufficient funds</strong> — check your available balance.</li>
-        <li><strong>Card limit reached</strong> — try UPI, net banking, or a different card.</li>
-        <li><strong>Network issue</strong> — ensure a stable connection and retry.</li>
-      </ol>
-    </div>
-    <div class="btn-row">
-      <a href="https://fitwithsudarshan.com/enroll" class="btn-pink">Try Again →</a><br/>
-      <a href="https://wa.me/919619708124" class="btn-wa">Need help? WhatsApp Us</a>
-    </div>
-  </div>
-  <div class="footer">
-    FitWithSudarshan · RECODE™ Transformation Program<br/>
-    Mumbai, India · Fitwithsudarshanofficial@gmail.com · +91 96197 08124
-  </div>
-</div>
+<body style="margin:0;padding:0;background-color:#06060f;">
+
+<!-- Preheader -->
+<div style="display:none;font-size:1px;color:#06060f;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">{{firstName}}, your payment didn&apos;t go through — no charges made. Here&apos;s how to complete your RECODE&#8482; enrollment.</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#06060f;padding:36px 16px;">
+<tr><td align="center">
+<table role="presentation" class="ec" width="620" cellpadding="0" cellspacing="0" style="max-width:620px;width:100%;">
+
+  <!-- TOP LINE — red/amber for failure -->
+  <tr><td height="4" style="background:linear-gradient(90deg,#ef4444 0%,#f87171 50%,#ef4444 100%);border-radius:4px 4px 0 0;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+
+  <!-- HEADER -->
+  <tr>
+    <td class="mp" style="background:linear-gradient(175deg,#130505 0%,#100c0c 50%,#09090f 100%);border-left:1px solid rgba(239,68,68,0.18);border-right:1px solid rgba(239,68,68,0.18);padding:48px 48px 40px;text-align:center;">
+      <img src="https://vducmiggraxtqdgt.public.blob.vercel-storage.com/logo.png" alt="FitWithSudarshan" width="130" style="width:130px;height:auto;margin:0 auto 28px;display:block;border-radius:16px;"/>
+      <!-- Alert badge -->
+      <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto 20px;">
+        <tr><td align="center" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);border-radius:100px;padding:7px 22px;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#f87171;"><span style="display:inline-block;vertical-align:middle;">&#9888;&#65039;</span>&nbsp;&nbsp;<span style="display:inline-block;vertical-align:middle;">Payment Unsuccessful</span></td></tr>
+      </table>
+      <h1 class="hh" style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:30px;font-weight:800;color:#ffffff;line-height:1.2;letter-spacing:-0.5px;text-align:center;">Your payment didn&rsquo;t go through</h1>
+      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:rgba(255,255,255,0.42);line-height:1.7;text-align:center;">No charges have been made to your account.</p>
+    </td>
+  </tr>
+
+  <!-- NO CHARGE STRIP -->
+  <tr>
+    <td class="mps" style="background:rgba(52,211,153,0.06);border-left:1px solid rgba(239,68,68,0.14);border-right:1px solid rgba(239,68,68,0.14);border-top:1px solid rgba(52,211,153,0.14);border-bottom:1px solid rgba(52,211,153,0.14);padding:14px 48px;text-align:center;">
+      <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
+        <tr><td align="center" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.32);border-radius:100px;padding:7px 26px;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#34d399;"><span style="display:inline-block;vertical-align:middle;">&#10003;</span>&nbsp;&nbsp;<span style="display:inline-block;vertical-align:middle;">Your Bank Account Has Not Been Charged</span></td></tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- GREETING + EXPLANATION -->
+  <tr>
+    <td class="mp" style="background:#0c0c18;border-left:1px solid rgba(239,68,68,0.14);border-right:1px solid rgba(239,68,68,0.14);padding:32px 48px 0;">
+      <p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:19px;font-weight:800;color:#fff;"><span style="display:inline-block;vertical-align:middle;">Hey {{firstName}} </span><span style="display:inline-block;vertical-align:middle;">&#128075;</span></p>
+      <p style="margin:0 0 26px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:rgba(255,255,255,0.45);line-height:1.9;">We weren&rsquo;t able to process your payment for the RECODE&#8482; program. <strong style="color:#fff;font-weight:700;">Don&rsquo;t worry — your bank account has not been charged.</strong> This can happen due to a temporary bank issue, card limit, or network interruption.</p>
+
+      <!-- Attempted enrollment -->
+      {{#if programName}}
+      <p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#e71763;"><span style="display:inline-block;vertical-align:middle;">&#127947;</span>&nbsp;<span style="display:inline-block;vertical-align:middle;">Attempted Enrollment</span></p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#08080f;border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden;margin-bottom:26px;">
+        <tr>
+          <td class="lbl" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.35);width:42%;border-bottom:1px solid rgba(255,255,255,0.055);vertical-align:middle;">Program</td>
+          <td class="val" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#fff;font-weight:700;text-align:right;border-bottom:1px solid rgba(255,255,255,0.055);vertical-align:middle;">{{programName}}</td>
+        </tr>
+        <tr>
+          <td class="lbl" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.35);border-bottom:1px solid rgba(255,255,255,0.055);vertical-align:middle;">Duration</td>
+          <td class="val" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#fff;font-weight:700;text-align:right;border-bottom:1px solid rgba(255,255,255,0.055);vertical-align:middle;">{{durationLabel}}</td>
+        </tr>
+        <tr>
+          <td class="lbl" style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.35);vertical-align:middle;">Status</td>
+          <td class="val" style="padding:13px 20px;text-align:right;vertical-align:middle;">
+            <table role="presentation" cellpadding="0" cellspacing="0" style="display:inline-table;margin-left:auto;">
+              <tr><td style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);border-radius:100px;padding:4px 14px;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:700;color:#f87171;letter-spacing:0.5px;">PAYMENT FAILED</td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      {{/if}}
+
+      <!-- Common reasons -->
+      <p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#e71763;"><span style="display:inline-block;vertical-align:middle;">&#128269;</span>&nbsp;<span style="display:inline-block;vertical-align:middle;">Common Reasons</span></p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.12);border-radius:12px;overflow:hidden;margin-bottom:0;">
+        <tr><td style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgba(255,255,255,0.55);border-bottom:1px solid rgba(255,255,255,0.05);line-height:1.6;"><span style="color:#f87171;font-weight:700;margin-right:10px;">&#8594;</span><strong style="color:#fff;font-weight:700;">Card declined</strong> &mdash; contact your bank to allow the transaction.</td></tr>
+        <tr><td style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgba(255,255,255,0.55);border-bottom:1px solid rgba(255,255,255,0.05);line-height:1.6;"><span style="color:#f87171;font-weight:700;margin-right:10px;">&#8594;</span><strong style="color:#fff;font-weight:700;">Insufficient funds</strong> &mdash; check your available balance.</td></tr>
+        <tr><td style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgba(255,255,255,0.55);border-bottom:1px solid rgba(255,255,255,0.05);line-height:1.6;"><span style="color:#f87171;font-weight:700;margin-right:10px;">&#8594;</span><strong style="color:#fff;font-weight:700;">Card limit reached</strong> &mdash; try UPI, net banking, or a different card.</td></tr>
+        <tr><td style="padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgba(255,255,255,0.55);line-height:1.6;"><span style="color:#34d399;font-weight:700;margin-right:10px;">&#8594;</span><strong style="color:#fff;font-weight:700;">Network issue</strong> &mdash; ensure a stable connection and try again.</td></tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- CTA -->
+  <tr>
+    <td class="mp" style="background:#0c0c18;border-left:1px solid rgba(239,68,68,0.14);border-right:1px solid rgba(239,68,68,0.14);padding:30px 48px 42px;text-align:center;">
+      <p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:rgba(255,255,255,0.32);line-height:1.6;">Your spot is still open &mdash; complete your enrollment now or reach out if you need help.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+        <tr>
+          <td class="bg" style="padding:0 10px 0 0;">
+            <a href="https://fitwithsudarshan.com/enroll" class="bb" style="display:inline-block;background:#e71763;color:#ffffff;text-decoration:none;padding:15px 32px;border-radius:12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.2px;"><span style="display:inline-block;vertical-align:middle;">Try Again</span>&nbsp;<span style="display:inline-block;vertical-align:middle;">&#8594;</span></a>
+          </td>
+          <td style="padding:0 0 0 10px;">
+            <a href="https://wa.me/919619708124" class="bb" style="display:inline-block;background:#25D366;color:#ffffff;text-decoration:none;padding:15px 32px;border-radius:12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.2px;"><span style="display:inline-block;vertical-align:middle;">&#128172;</span>&nbsp;<span style="display:inline-block;vertical-align:middle;">Need Help? WhatsApp Us</span></a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- FOOTER -->
+  <tr>
+    <td class="mps" style="background:#05050d;border:1px solid rgba(255,255,255,0.05);border-top:none;border-radius:0 0 16px 16px;padding:26px 48px;text-align:center;">
+      <img src="https://vducmiggraxtqdgt.public.blob.vercel-storage.com/logo.png" alt="FitWithSudarshan" width="48" style="width:48px;height:auto;display:block;margin:0 auto 12px;border-radius:10px;opacity:0.45;"/>
+      <p style="margin:0 0 5px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:rgba(255,255,255,0.22);letter-spacing:0.5px;">FitWithSudarshan &nbsp;&middot;&nbsp; RECODE&#8482; Transformation Program</p>
+      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.12);">Mumbai, India &nbsp;&middot;&nbsp; <a href="mailto:Fitwithsudarshanofficial@gmail.com" style="color:rgba(255,255,255,0.2);text-decoration:none;">Fitwithsudarshanofficial@gmail.com</a> &nbsp;&middot;&nbsp; +91 96197 08124</p>
+    </td>
+  </tr>
+  <tr><td height="4" style="background:linear-gradient(90deg,transparent 0%,#ef4444 50%,transparent 100%);font-size:1px;line-height:1px;">&nbsp;</td></tr>
+
+</table>
+</td></tr>
+</table>
 </body>
 </html>
