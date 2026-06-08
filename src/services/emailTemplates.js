@@ -138,6 +138,33 @@ const templateBuilders = {
         });
         return { subject, html };
     },
+    contact_inquiry_coach(d) {
+        const subject = `📩 New Inquiry — ${d.name} · ${d.goal || 'General'}`;
+        const html = inject(readTemplate('contact_inquiry_coach'), {
+            name: d.name || '—',
+            email: d.email || '—',
+            phone: d.phone || '—',
+            phoneClean: (d.phone || '').replace(/\D/g, ''),
+            goal: d.goal || '—',
+            message: d.message || '—',
+        });
+        return { subject, html };
+    },
+
+    contact_inquiry_customer(d) {
+        const firstName = (d.name || 'there').split(' ')[0];
+        const subject = `✅ Got your message, ${firstName}! — RECODE™`;
+        const html = inject(readTemplate('contact_inquiry_customer'), {
+            firstName,
+            name: d.name || '—',
+            email: d.email || '—',
+            phone: d.phone || '—',
+            goal: d.goal || '—',
+            message: d.message || '—',
+        });
+        return { subject, html };
+    },
+
 };
 
 // ── Public API ────────────────────────────────────────────────────────────────
