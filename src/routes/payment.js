@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { createOrder, verifyPayment, healthCheck, downloadInvoice } from '../controllers/paymentController.js';
 import { sendEmail, sendEnrollmentEmails } from '../controllers/emailController.js';
 import { paymentLimiter } from '../middleware/security.js';
+import { assessmentUpload, submitAssessmentHandler } from '../controllers/assessmentController.js';
 
 const router = Router();
 
@@ -21,5 +22,13 @@ router.post('/send-enrollment-emails', sendEnrollmentEmails);
 
 
 router.post('/invoice', downloadInvoice);
+
+
+// ── Onboarding assessment ─────────────────────────────────────────────────────
+// multipart/form-data: text fields + photoFront, photoSide, bloodReport files.
+// assessmentUpload (multer) MUST run before submitAssessmentHandler so that
+// req.body and req.files are populated.
+router.post('/submit-assessment', assessmentUpload, submitAssessmentHandler);
+
 
 export default router;
