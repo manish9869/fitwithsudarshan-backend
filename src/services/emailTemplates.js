@@ -64,12 +64,12 @@ function inject(html, data) {
 }
 
 // ── Template definitions ──────────────────────────────────────────────────────
-// Each entry maps a template name → (data) => { subject, html }
 
 const templateBuilders = {
 
     enrollment_coach(d) {
         const subject = `🎉 New Enrollment — ${d.customerName} · ${d.enrollmentId}`;
+        const couponSavingsFormatted = d.couponSavings > 0 ? fmt(d.couponSavings) : '';
         const html = inject(readTemplate('enrollment_coach'), {
             customerName: d.customerName || '—',
             customerEmail: d.customerEmail || '—',
@@ -81,6 +81,11 @@ const templateBuilders = {
             durationLabel: d.durationMonths ? `${d.durationMonths} Month${d.durationMonths > 1 ? 's' : ''}` : '—',
             enrollmentId: d.enrollmentId || '—',
             amountFormatted: fmt(d.amountPaid),
+            originalAmount: fmt(d.originalAmount || d.amountPaid),
+            // Coupon fields — used in {{#if}} blocks in template
+            couponCode: d.couponCode || '',
+            couponSavings: couponSavingsFormatted,
+            hasCoupon: !!(d.couponCode && d.couponSavings > 0),
             razorpayPaymentId: d.razorpayPaymentId || '—',
             razorpayOrderId: d.razorpayOrderId || '—',
             paymentDate: fmtDate(d.paymentDate),
@@ -91,6 +96,7 @@ const templateBuilders = {
     enrollment_customer(d) {
         const firstName = (d.customerName || 'there').split(' ')[0];
         const subject = `✅ You're enrolled in RECODE™ — ${d.programName}`;
+        const couponSavingsFormatted = d.couponSavings > 0 ? fmt(d.couponSavings) : '';
         const html = inject(readTemplate('enrollment_customer'), {
             firstName,
             programName: d.programName || '—',
@@ -98,6 +104,11 @@ const templateBuilders = {
             planTypeLabel: d.planType === 'couple' ? 'Couple Plan' : 'Individual',
             enrollmentId: d.enrollmentId || '—',
             amountFormatted: fmt(d.amountPaid),
+            originalAmount: fmt(d.originalAmount || d.amountPaid),
+            // Coupon fields
+            couponCode: d.couponCode || '',
+            couponSavings: couponSavingsFormatted,
+            hasCoupon: !!(d.couponCode && d.couponSavings > 0),
             paymentDate: fmtDate(d.paymentDate),
             razorpayPaymentId: d.razorpayPaymentId || '—',
         });
@@ -138,6 +149,7 @@ const templateBuilders = {
         });
         return { subject, html };
     },
+
     contact_inquiry_coach(d) {
         const subject = `📩 New Inquiry — ${d.name} · ${d.goal || 'General'}`;
         const html = inject(readTemplate('contact_inquiry_coach'), {
