@@ -49,12 +49,23 @@ function readTemplate(name) {
 /**
  * Replace all {{key}} tokens in html with values from the data object.
  * Unknown keys are replaced with '—'.
- * Also handles simple block conditionals: {{#if key}}...{{/if}}
+ * Also handles block conditionals:
+ *   {{#if key}}...{{/if}}
+ *   {{#if key}}...{{else}}...{{/if}}
  */
 function inject(html, data) {
-    // Handle {{#if key}}...{{/if}} blocks
-    html = html.replace(/\{\{#if (\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_, key, inner) => {
-        return data[key] ? inner : '';
+    // Handle {{#if key}}...{{else}}...{{/if}} AND {{#if key}}...{{/if}} blocks.
+    // Previously this only matched up to the first {{/if}} with no {{else}}
+    // support, so any template using {{else}} (e.g. enrollment_coach.html's
+    // goals section) would render blank whenever the condition was false —
+    // which is why customer goals were missing for individual enrollments.
+    html = html.replace(/\{\{#if (\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_, key, block) => {
+        const elseSplit = block.match(/^([\s\S]*?)\{\{else\}\}([\s\S]*)$/);
+        if (elseSplit) {
+            const [, truthyBlock, falsyBlock] = elseSplit;
+            return data[key] ? truthyBlock : falsyBlock;
+        }
+        return data[key] ? block : '';
     });
     // Replace {{key}} tokens
     return html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
