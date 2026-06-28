@@ -31,10 +31,14 @@ export function generateInvoiceBuffer(enrollment) {
     const GREY35 = [90, 90, 105];
     const GREEN = [52, 211, 153];
     const GREEN_BG = [18, 52, 38];
+    const AMBER = [251, 191, 36];
+    const AMBER_BG = [52, 40, 10];
 
     const tc = (c) => doc.setTextColor(...c);
     const fc = (c) => doc.setFillColor(...c);
     const dc = (c) => doc.setDrawColor(...c);
+
+    const hasCoupon = !!(enrollment.couponCode && enrollment.couponSavings > 0);
 
     // Background
     fc(BG); doc.rect(0, 0, PW, PH, 'F');
@@ -136,7 +140,36 @@ export function generateInvoiceBuffer(enrollment) {
     refCell(ML + 5, 'ENROLLMENT ID', enrollment.enrollmentId || '—');
     refCell(ML + C1W + 5, 'PAYMENT ID', enrollment.razorpayPaymentId || '—');
     refCell(ML + C1W * 2 + 5, 'ORDER ID', enrollment.razorpayOrderId || '—');
-    y += REF_H + 8;
+    y += REF_H + 6;
+
+    // ── COUPON BANNER (only if coupon was applied) ─────────────────────────────
+    if (hasCoupon) {
+        const COUPON_H = 15;
+        fc(AMBER_BG); doc.roundedRect(ML, y, CW, COUPON_H, 2.5, 2.5, 'F');
+        dc(AMBER); doc.setLineWidth(0.4);
+        doc.roundedRect(ML, y, CW, COUPON_H, 2.5, 2.5, 'S');
+
+        // Tag icon (text substitute)
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
+        tc(AMBER);
+        doc.text('COUPON APPLIED', ML + 6, y + 6);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+        tc(GREY60);
+        doc.text(`Code: ${enrollment.couponCode}  ·  You saved ${fmt(enrollment.couponSavings)} on this plan`, ML + 6, y + 11.5);
+
+        // Savings badge on right
+        const SAV_W = 46;
+        fc([30, 60, 30]); doc.roundedRect(PW - MR - SAV_W - 2, y + 3, SAV_W, 9, 2, 2, 'F');
+        dc(GREEN); doc.setLineWidth(0.3);
+        doc.roundedRect(PW - MR - SAV_W - 2, y + 3, SAV_W, 9, 2, 2, 'S');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+        tc(GREEN);
+        doc.text(`-${fmt(enrollment.couponSavings)}`, PW - MR - SAV_W / 2 - 2, y + 8.8, { align: 'center' });
+
+        y += COUPON_H + 6;
+    } else {
+        y += 2;
+    }
 
     // Line items table
     const TBL_X = ML, TBL_W = CW;
@@ -155,54 +188,102 @@ export function generateInvoiceBuffer(enrollment) {
     doc.text('AMOUNT', C_AMT, y + 6.8, { align: 'right' });
     y += TH;
 
-    const TR = 16;
+    const TR = hasCoupon ? 20 : 16;
     fc(CARD2); doc.rect(TBL_X, y, TBL_W, TR, 'F');
     dc(BORDER); doc.setLineWidth(0.18);
     doc.rect(TBL_X, y, TBL_W, TR, 'S');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
     tc(WHITE);
-    doc.text('RECODE™ Coaching Plan', C_DESC, y + TR / 2 + 3);
+    doc.text('RECODE™ Coaching Plan', C_DESC, y + (hasCoupon ? TR / 2 : TR / 2 + 3));
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
     tc(GREY60);
-    doc.text(enrollment.coachingType || 'Online', C_TYPE, y + TR / 2 + 3);
+    doc.text(enrollment.coachingType || 'Online', C_TYPE, y + (hasCoupon ? TR / 2 : TR / 2 + 3));
     doc.text(
         enrollment.durationMonths
             ? `${enrollment.durationMonths} Month${enrollment.durationMonths > 1 ? 's' : ''}`
             : '—',
-        C_DUR, y + TR / 2 + 3,
+        C_DUR, y + (hasCoupon ? TR / 2 : TR / 2 + 3),
     );
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-    tc(WHITE);
-    doc.text(fmt(enrollment.amountPaid), C_AMT, y + TR / 2 + 3, { align: 'right' });
+
+    // Amount column — show strikethrough original + discounted price if coupon
+    if (hasCoupon) {
+        // Original price with strikethrough
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
+        tc(GREY60);
+        const origTxt = fmt(enrollment.originalAmount || enrollment.amountPaid);
+        const origX = C_AMT;
+        doc.text(origTxt, origX, y + TR / 2 - 1, { align: 'right' });
+        // Strikethrough line
+        const origW = doc.getTextWidth(origTxt);
+        dc(GREY60); doc.setLineWidth(0.5);
+        doc.line(origX - origW, y + TR / 2 - 2.8, origX, y + TR / 2 - 2.8);
+        // Final price
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+        tc(BRAND);
+        doc.text(fmt(enrollment.amountPaid), C_AMT, y + TR / 2 + 5, { align: 'right' });
+    } else {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+        tc(WHITE);
+        doc.text(fmt(enrollment.amountPaid), C_AMT, y + TR / 2 + 3, { align: 'right' });
+    }
     y += TR + 6;
 
-    // Totals
+    // Totals block
     const TOT_W = 90;
     const TOT_X = TBL_X + TBL_W - TOT_W;
     const LAB_X = TOT_X + 6;
     const VAL_X = TOT_X + TOT_W - 6;
 
-    fc(CARD); doc.rect(TOT_X, y, TOT_W, 9, 'F');
-    dc(BORDER); doc.setLineWidth(0.15);
-    doc.rect(TOT_X, y, TOT_W, 9, 'S');
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); tc(GREY60);
-    doc.text('Subtotal', LAB_X, y + 5.8);
-    tc(WHITE); doc.text(fmt(enrollment.amountPaid), VAL_X, y + 5.8, { align: 'right' });
-    y += 9;
+    if (hasCoupon) {
+        // Original price row
+        fc(CARD); doc.rect(TOT_X, y, TOT_W, 9, 'F');
+        dc(BORDER); doc.setLineWidth(0.15);
+        doc.rect(TOT_X, y, TOT_W, 9, 'S');
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); tc(GREY60);
+        doc.text('Original Price', LAB_X, y + 5.8);
+        // Strikethrough value
+        const oTxt = fmt(enrollment.originalAmount);
+        doc.text(oTxt, VAL_X, y + 5.8, { align: 'right' });
+        const oW = doc.getTextWidth(oTxt);
+        dc(GREY60); doc.setLineWidth(0.4);
+        doc.line(VAL_X - oW, y + 4, VAL_X, y + 4);
+        y += 9;
 
+        // Coupon discount row
+        fc(AMBER_BG); doc.rect(TOT_X, y, TOT_W, 9, 'F');
+        dc(AMBER); doc.setLineWidth(0.15);
+        doc.rect(TOT_X, y, TOT_W, 9, 'S');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); tc(AMBER);
+        doc.text(`Coupon: ${enrollment.couponCode}`, LAB_X, y + 5.8);
+        doc.text(`-${fmt(enrollment.couponSavings)}`, VAL_X, y + 5.8, { align: 'right' });
+        y += 9;
+    } else {
+        // Subtotal row
+        fc(CARD); doc.rect(TOT_X, y, TOT_W, 9, 'F');
+        dc(BORDER); doc.setLineWidth(0.15);
+        doc.rect(TOT_X, y, TOT_W, 9, 'S');
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); tc(GREY60);
+        doc.text('Subtotal', LAB_X, y + 5.8);
+        tc(WHITE); doc.text(fmt(enrollment.amountPaid), VAL_X, y + 5.8, { align: 'right' });
+        y += 9;
+    }
+
+    // Tax row
     fc(CARD2); doc.rect(TOT_X, y, TOT_W, 9, 'F');
     dc(BORDER); doc.rect(TOT_X, y, TOT_W, 9, 'S');
-    tc(GREY60); doc.text('GST / Tax', LAB_X, y + 5.8);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); tc(GREY60);
+    doc.text('GST / Tax', LAB_X, y + 5.8);
     doc.text('Included', VAL_X, y + 5.8, { align: 'right' });
     y += 9;
 
+    // Total paid row
     const TOT_ROW_H = 14;
     fc(BRAND); doc.rect(TOT_X, y, TOT_W, TOT_ROW_H, 'F');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); tc(WHITE);
     doc.text('TOTAL PAID', LAB_X, y + TOT_ROW_H / 2 + 2.5);
     doc.setFontSize(10);
     doc.text(fmt(enrollment.amountPaid), VAL_X, y + TOT_ROW_H / 2 + 2.5, { align: 'right' });
-    y += TOT_ROW_H + 10;
+    y += TOT_ROW_H + 8;
 
     // What happens next
     const NEXT_H = 52;
@@ -239,7 +320,6 @@ export function generateInvoiceBuffer(enrollment) {
         PW / 2, FY + 14, { align: 'center' },
     );
 
-    // Return as Buffer (Node.js compatible)
     const arrayBuffer = doc.output('arraybuffer');
     return Buffer.from(arrayBuffer);
 }
