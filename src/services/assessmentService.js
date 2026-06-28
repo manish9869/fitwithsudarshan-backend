@@ -2,25 +2,14 @@
  * src/services/assessmentService.js
  *
  * Handles RECODE™ onboarding/body assessment submissions:
- *   - Uploads photoFront / photoSide / bloodReport to the private
- *     "assessments" Supabase Storage bucket
+ *   - Uploads photoFront / photoSide / bloodReport (image OR pdf) to the
+ *     private "assessments" Supabase Storage bucket
  *   - Inserts the text fields + storage paths into the `assessments` table
- *   - Generates short-lived signed URLs (for the coach notification email)
+ *   - Generates short-lived signed URLs for the coach notification email
  *
- * IMPORTANT: this file runs on the BACKEND (Node/Express) and uses Supabase's
- * SECRET key (the new replacement for the legacy service_role JWT) — never
- * expose this key to the frontend. Add to your backend .env (and Vercel
- * project env vars):
- *
+ * Env vars required on the backend:
  *   SUPABASE_URL=https://xxxx.supabase.co
- *   SUPABASE_SECRET_KEY=sb_secret_.
- *
- * SUPABASE_SECRET_KEY bypasses Row Level Security and has full project
- * access — this is the direct equivalent of the old service_role key.
- * It is DIFFERENT from SUPABASE_PUBLISHABLE_KEY (frontend-safe, anon-equivalent)
- * and from VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY used in the frontend.
- * SUPABASE_JWKS_URL is not needed here — that's only for verifying end-user
- * JWTs yourself, which this backend route doesn't do.
+ *   SUPABASE_SECRET_KEY=sb_secret_...
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -28,7 +17,7 @@ import { randomUUID } from 'crypto';
 import ws from 'ws';
 
 const BUCKET = 'assessments';
-const SIGNED_URL_EXPIRY_SECONDS = 60 * 60 * 24 * 7; // 7 days — plenty for the coach to review
+const SIGNED_URL_EXPIRY_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 let _supabase = null;
 
@@ -40,17 +29,10 @@ function getSupabase() {
 
     if (!url || !key) {
         throw new Error(
-            '[assessmentService] Missing SUPABASE_URL or SUPABASE_SECRET_KEY env vars on the backend.'
+            '[assessmentService] Missing SUPABASE_URL or SUPABASE_SECRET_KEY env vars.'
         );
     }
 
-    // This service only uses Storage + table inserts (plain HTTP) — never
-    // Realtime/WebSockets. supabase-js still spins up its Realtime sub-client
-    // on init regardless, which on Node <22 (no native WebSocket) logs:
-    //   "Node.js 20 detected without native WebSocket support..."
-    // Passing the `ws` package as the transport silences the warning and
-    // matches Supabase's own suggested fix. Run `npm install ws` if it's
-    // not already a dependency.
     _supabase = createClient(url, key, {
         auth: { persistSession: false },
         realtime: { transport: ws },
@@ -60,13 +42,15 @@ function getSupabase() {
 
 /**
  * Upload a single file buffer to the assessments bucket.
- * @returns {Promise<string|null>} storage path, or null if no file provided
+ * Preserves original extension so PDFs stay as .pdf and images stay as image types.
+ * Returns the storage path, or null if no file provided.
  */
 async function uploadFile(supabase, file, assessmentId, label) {
     if (!file) return null;
 
-    const ext = (file.originalname?.split('.').pop() || 'jpg').toLowerCase();
-    const path = `${assessmentId}/${label}-${randomUUID()}.${ext}`;
+    // Preserve the original file extension (important for PDFs vs images)
+    const originalExt = (file.originalname?.split('.').pop() || 'bin').toLowerCase();
+    const path = `${assessmentId}/${label}-${randomUUID()}.${originalExt}`;
 
     const { error } = await supabase.storage
         .from(BUCKET)
@@ -83,19 +67,17 @@ async function uploadFile(supabase, file, assessmentId, label) {
 }
 
 /**
- * Submit a full assessment: uploads files + inserts the DB row.
+ * Submit a full assessment: uploads files → inserts DB row.
  *
  * @param {object} fields - all non-file text fields from the form
- * @param {object} files  - { photoFront, photoSide, bloodReport } — each
- *                           either a multer file object ({ buffer, originalname,
- *                           mimetype }) or undefined/null
+ * @param {object} files  - { photoFront, photoSide, bloodReport }
  * @returns {Promise<{ id: string, row: object }>}
  */
 export async function submitAssessment(fields, files = {}) {
     const supabase = getSupabase();
     const assessmentId = randomUUID();
 
-    // Upload files first — if one fails we haven't written a partial DB row yet.
+    // Upload files first — if one fails we haven't written a partial DB row yet
     const [photoFrontPath, photoSidePath, bloodReportPath] = await Promise.all([
         uploadFile(supabase, files.photoFront, assessmentId, 'front'),
         uploadFile(supabase, files.photoSide, assessmentId, 'side'),
@@ -106,6 +88,7 @@ export async function submitAssessment(fields, files = {}) {
         id: assessmentId,
         first_name: fields.firstName,
         last_name: fields.lastName || null,
+        email: fields.email || null,   // ← added: customer email for confirmation
         whatsapp: fields.whatsapp,
         age: fields.age,
         gender: fields.gender,
@@ -152,10 +135,8 @@ export async function submitAssessment(fields, files = {}) {
 }
 
 /**
- * Generate a temporary signed URL for a stored file (used in the coach
- * notification email so they can view photos without the bucket being public).
- * @param {string|null} path
- * @returns {Promise<string|null>}
+ * Generate a temporary signed URL for a stored file.
+ * Works for both images AND PDFs — the signed URL is a direct download/view link.
  */
 export async function getSignedFileUrl(path) {
     if (!path) return null;
@@ -174,7 +155,7 @@ export async function getSignedFileUrl(path) {
 }
 
 /**
- * Convenience: sign all three file paths for a submitted assessment at once.
+ * Sign all three file paths for a submitted assessment.
  */
 export async function getSignedFileUrls({ photo_front_path, photo_side_path, blood_report_path }) {
     const [photoFrontUrl, photoSideUrl, bloodReportUrl] = await Promise.all([

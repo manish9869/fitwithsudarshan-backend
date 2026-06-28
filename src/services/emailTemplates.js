@@ -1,8 +1,8 @@
 /**
- * src/services/emailTemplates.js
+ * FIXED: inject() now properly returns the processed HTML
+ * and handles {{placeholder}} token replacement.
  *
- * Reads HTML files from src/templates/, injects data via {{placeholder}}
- * replacement, and returns { subject, html }.
+ * Replace your src/services/emailTemplates.js with this file.
  */
 
 import fs from 'fs';
@@ -47,12 +47,14 @@ function readTemplate(name) {
 }
 
 /**
- * Replace all {{key}} tokens in html with values from the data object.
- * Unknown keys are replaced with '—'.
- * Also handles simple block conditionals: {{#if key}}...{{/if}}
+ * FIX: inject() was previously defined but never returned anything.
+ * Now it:
+ *   1. Handles {{#if key}}...{{/if}} and {{#if key}}...{{else}}...{{/if}} blocks
+ *   2. Replaces all {{key}} tokens with values from data
+ *   3. Returns the fully processed HTML string
  */
 function inject(html, data) {
-    // Handle {{#if key}}...{{/if}} blocks
+    // 1. Handle {{#if key}}...{{else}}...{{/if}} and {{#if key}}...{{/if}} blocks
     html = html.replace(/\{\{#if (\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_, key, block) => {
         const elseSplit = block.match(/^([\s\S]*?)\{\{else\}\}([\s\S]*)$/);
         if (elseSplit) {
@@ -61,6 +63,17 @@ function inject(html, data) {
         }
         return data[key] ? block : '';
     });
+
+    // 2. Replace all {{key}} tokens — unknown keys fall back to '—'
+    html = html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+        const val = data[key];
+        if (val === undefined || val === null) return '—';
+        if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+        return String(val);
+    });
+
+    // 3. ✅ RETURN the processed HTML (this was missing before)
+    return html;
 }
 
 function formatGoals(goals) {
@@ -87,11 +100,9 @@ const templateBuilders = {
             enrollmentId: d.enrollmentId || '—',
             amountFormatted: fmt(d.amountPaid),
             originalAmount: fmt(d.originalAmount || d.amountPaid),
-            // Coupon fields — used in {{#if}} blocks in template
             couponCode: d.couponCode || '',
             couponSavings: couponSavingsFormatted,
             hasCoupon: !!(d.couponCode && d.couponSavings > 0),
-            // Goals
             customerGoals: formatGoals(d.goals),
             partnerGoals: formatGoals(d.partnerGoals),
             hasPartnerGoals,
@@ -114,11 +125,9 @@ const templateBuilders = {
             enrollmentId: d.enrollmentId || '—',
             amountFormatted: fmt(d.amountPaid),
             originalAmount: fmt(d.originalAmount || d.amountPaid),
-            // Coupon fields
             couponCode: d.couponCode || '',
             couponSavings: couponSavingsFormatted,
             hasCoupon: !!(d.couponCode && d.couponSavings > 0),
-            // Goals
             customerGoals: formatGoals(d.goals),
             paymentDate: fmtDate(d.paymentDate),
             razorpayPaymentId: d.razorpayPaymentId || '—',
@@ -189,8 +198,6 @@ const templateBuilders = {
         return { subject, html };
     },
 
-    // ── Onboarding / Body Assessment ──────────────────────────────────────────
-
     assessment_coach(d) {
         const subject = `📋 New Assessment — ${d.first_name || ''} ${d.last_name || ''}`.trim();
         const html = inject(readTemplate('assessment_coach'), {
@@ -217,8 +224,6 @@ const templateBuilders = {
             biggest_struggle: d.biggest_struggle || '—',
             medical_conditions: d.medical_conditions || 'None reported.',
             commitment: d.commitment ?? '—',
-            // Signed Supabase Storage URLs (7-day expiry), passed in by the
-            // controller after upload — see assessmentService.getSignedFileUrls()
             photoFrontUrl: d.photoFrontUrl || '',
             photoSideUrl: d.photoSideUrl || '',
             bloodReportUrl: d.bloodReportUrl || '',
@@ -243,12 +248,6 @@ const templateBuilders = {
 
 export const TEMPLATE_NAMES = Object.keys(templateBuilders);
 
-/**
- * Render a template by name.
- * @param {string} templateName
- * @param {object} data
- * @returns {{ subject: string, html: string }}
- */
 export function renderTemplate(templateName, data) {
     const builder = templateBuilders[templateName];
     if (!builder) {
