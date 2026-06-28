@@ -49,16 +49,10 @@ function readTemplate(name) {
 /**
  * Replace all {{key}} tokens in html with values from the data object.
  * Unknown keys are replaced with '—'.
- * Also handles block conditionals:
- *   {{#if key}}...{{/if}}
- *   {{#if key}}...{{else}}...{{/if}}
+ * Also handles simple block conditionals: {{#if key}}...{{/if}}
  */
 function inject(html, data) {
-    // Handle {{#if key}}...{{else}}...{{/if}} AND {{#if key}}...{{/if}} blocks.
-    // Previously this only matched up to the first {{/if}} with no {{else}}
-    // support, so any template using {{else}} (e.g. enrollment_coach.html's
-    // goals section) would render blank whenever the condition was false —
-    // which is why customer goals were missing for individual enrollments.
+    // Handle {{#if key}}...{{/if}} blocks
     html = html.replace(/\{\{#if (\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_, key, block) => {
         const elseSplit = block.match(/^([\s\S]*?)\{\{else\}\}([\s\S]*)$/);
         if (elseSplit) {
@@ -66,11 +60,6 @@ function inject(html, data) {
             return data[key] ? truthyBlock : falsyBlock;
         }
         return data[key] ? block : '';
-    });
-    // Replace {{key}} tokens
-    return html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-        const val = data[key];
-        return val !== undefined && val !== null ? String(val) : '—';
     });
 }
 
@@ -196,6 +185,54 @@ const templateBuilders = {
             phone: d.phone || '—',
             goal: d.goal || '—',
             message: d.message || '—',
+        });
+        return { subject, html };
+    },
+
+    // ── Onboarding / Body Assessment ──────────────────────────────────────────
+
+    assessment_coach(d) {
+        const subject = `📋 New Assessment — ${d.first_name || ''} ${d.last_name || ''}`.trim();
+        const html = inject(readTemplate('assessment_coach'), {
+            first_name: d.first_name || '—',
+            last_name: d.last_name || '',
+            whatsapp: d.whatsapp || '—',
+            whatsappClean: (d.whatsapp || '').replace(/\D/g, ''),
+            age: d.age || '—',
+            gender: d.gender || '—',
+            city: d.city || '—',
+            plan: d.plan || '—',
+            current_weight: d.current_weight || '—',
+            height: d.height || '—',
+            workout_status: d.workout_status || '—',
+            training_days: d.training_days || '—',
+            training_location: d.training_location || '—',
+            profession: d.profession || '—',
+            main_goal: d.main_goal || '—',
+            desired_result: d.desired_result || '—',
+            why_now: d.why_now || '—',
+            food_preference: d.food_preference || '—',
+            sleep_hours: d.sleep_hours || '—',
+            daily_food_routine: d.daily_food_routine || '—',
+            biggest_struggle: d.biggest_struggle || '—',
+            medical_conditions: d.medical_conditions || 'None reported.',
+            commitment: d.commitment ?? '—',
+            // Signed Supabase Storage URLs (7-day expiry), passed in by the
+            // controller after upload — see assessmentService.getSignedFileUrls()
+            photoFrontUrl: d.photoFrontUrl || '',
+            photoSideUrl: d.photoSideUrl || '',
+            bloodReportUrl: d.bloodReportUrl || '',
+        });
+        return { subject, html };
+    },
+
+    assessment_customer(d) {
+        const firstName = d.first_name || 'there';
+        const subject = `✅ Assessment received, ${firstName}! — RECODE™`;
+        const html = inject(readTemplate('assessment_customer'), {
+            first_name: firstName,
+            plan: d.plan || '—',
+            main_goal: d.main_goal || '—',
         });
         return { subject, html };
     },
