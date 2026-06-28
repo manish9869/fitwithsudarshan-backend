@@ -25,6 +25,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+import ws from 'ws';
 
 const BUCKET = 'assessments';
 const SIGNED_URL_EXPIRY_SECONDS = 60 * 60 * 24 * 7; // 7 days — plenty for the coach to review
@@ -43,8 +44,16 @@ function getSupabase() {
         );
     }
 
+    // This service only uses Storage + table inserts (plain HTTP) — never
+    // Realtime/WebSockets. supabase-js still spins up its Realtime sub-client
+    // on init regardless, which on Node <22 (no native WebSocket) logs:
+    //   "Node.js 20 detected without native WebSocket support..."
+    // Passing the `ws` package as the transport silences the warning and
+    // matches Supabase's own suggested fix. Run `npm install ws` if it's
+    // not already a dependency.
     _supabase = createClient(url, key, {
         auth: { persistSession: false },
+        realtime: { transport: ws },
     });
     return _supabase;
 }
