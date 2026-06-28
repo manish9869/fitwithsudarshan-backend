@@ -63,6 +63,10 @@ function inject(html, data) {
     });
 }
 
+function formatGoals(goals) {
+    return Array.isArray(goals) && goals.length ? goals.join(', ') : '—';
+}
+
 // ── Template definitions ──────────────────────────────────────────────────────
 
 const templateBuilders = {
@@ -70,6 +74,7 @@ const templateBuilders = {
     enrollment_coach(d) {
         const subject = `🎉 New Enrollment — ${d.customerName} · ${d.enrollmentId}`;
         const couponSavingsFormatted = d.couponSavings > 0 ? fmt(d.couponSavings) : '';
+        const hasPartnerGoals = Array.isArray(d.partnerGoals) && d.partnerGoals.length > 0;
         const html = inject(readTemplate('enrollment_coach'), {
             customerName: d.customerName || '—',
             customerEmail: d.customerEmail || '—',
@@ -86,6 +91,10 @@ const templateBuilders = {
             couponCode: d.couponCode || '',
             couponSavings: couponSavingsFormatted,
             hasCoupon: !!(d.couponCode && d.couponSavings > 0),
+            // Goals
+            customerGoals: formatGoals(d.goals),
+            partnerGoals: formatGoals(d.partnerGoals),
+            hasPartnerGoals,
             razorpayPaymentId: d.razorpayPaymentId || '—',
             razorpayOrderId: d.razorpayOrderId || '—',
             paymentDate: fmtDate(d.paymentDate),
@@ -109,6 +118,8 @@ const templateBuilders = {
             couponCode: d.couponCode || '',
             couponSavings: couponSavingsFormatted,
             hasCoupon: !!(d.couponCode && d.couponSavings > 0),
+            // Goals
+            customerGoals: formatGoals(d.goals),
             paymentDate: fmtDate(d.paymentDate),
             razorpayPaymentId: d.razorpayPaymentId || '—',
         });
@@ -124,6 +135,7 @@ const templateBuilders = {
             durationLabel: d.durationMonths ? `${d.durationMonths} Month${d.durationMonths > 1 ? 's' : ''}` : '—',
             amountFormatted: fmt(d.amountPaid),
             paymentDate: fmtDate(d.paymentDate),
+            customerGoals: formatGoals(d.goals),
         });
         return { subject, html };
     },
