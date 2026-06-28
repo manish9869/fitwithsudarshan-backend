@@ -13,7 +13,7 @@
  * project env vars):
  *
  *   SUPABASE_URL=https://xxxx.supabase.co
- *   SUPABASE_SECRET_KEY=sb_secret_...
+ *   SUPABASE_SECRET_KEY=sb_secret_.
  *
  * SUPABASE_SECRET_KEY bypasses Row Level Security and has full project
  * access — this is the direct equivalent of the old service_role key.
