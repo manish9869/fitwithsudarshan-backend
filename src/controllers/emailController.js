@@ -37,6 +37,8 @@ export async function sendEmail(req, res, next) {
   try {
     const { template, to, data = {} } = req.body;
 
+
+    console.log('Email data received for sending:', template, to, data);
     // ── Validate input ────────────────────────────────────────────────────
     if (!template || typeof template !== 'string') {
       return res.status(400).json({ error: '`template` is required (string).' });
@@ -84,6 +86,8 @@ export async function sendEnrollmentEmails(req, res, next) {
   try {
     const enrollment = req.body;
 
+
+    console.log('Enrollment data received for email sending:', enrollment);
     if (!enrollment?.customerEmail || !enrollment?.enrollmentId) {
       return res.status(400).json({ error: 'Invalid enrollment data.' });
     }
