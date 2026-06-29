@@ -51,7 +51,7 @@ export async function listEnrollments(req, res) {
         const ps = clampPageSize(pageSize);
         const pg = Math.max(1, parseInt(page, 10) || 1);
 
-        let query = supabase.from('enrollments').select('*', { count: 'planned' });
+        let query = supabase.from('enrollments').select('*', { count: 'exact' });
 
         if (search.trim()) {
             const s = search.trim().replace(/[%,]/g, '');
