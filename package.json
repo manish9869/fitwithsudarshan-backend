@@ -12,6 +12,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^147.0.0",
     "@supabase/supabase-js": "^2.108.2",
     "bcryptjs": "^3.0.3",
     "compression": "^1.7.4",
@@ -26,6 +27,7 @@
     "multer": "^2.2.0",
     "nodemailer": "^8.0.10",
     "puppeteer": "^24.43.1",
+    "puppeteer-core": "^24.43.1",
     "winston": "^3.13.0",
     "ws": "^8.21.0"
   }
