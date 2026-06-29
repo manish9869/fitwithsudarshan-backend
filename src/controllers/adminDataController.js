@@ -51,7 +51,7 @@ export async function listEnrollments(req, res) {
         const ps = clampPageSize(pageSize);
         const pg = Math.max(1, parseInt(page, 10) || 1);
 
-        let query = supabase.from('enrollments').select('*', { count: 'exact' });
+        let query = supabase.from('enrollments').select('*', { count: 'planned' });
 
         if (search.trim()) {
             const s = search.trim().replace(/[%,]/g, '');
@@ -250,6 +250,31 @@ export async function getAssessment(req, res) {
     }
 }
 
+export async function exportAssessments(req, res) {
+    try {
+        const supabase = getSupabaseAdmin();
+        const { search = '', status = 'all', plan = 'all', dateFrom, dateTo } = req.query;
+
+        let query = supabase.from('assessments').select('*');
+        if (search.trim()) {
+            const s = search.trim().replace(/[%,]/g, '');
+            query = query.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,whatsapp.ilike.%${s}%,email.ilike.%${s}%`);
+        }
+        if (status !== 'all') query = query.eq('status', status);
+        if (plan !== 'all') query = query.eq('plan', plan);
+        if (dateFrom) query = query.gte('created_at', dateFrom);
+        if (dateTo) query = query.lte('created_at', dateTo);
+        query = query.order('created_at', { ascending: false });
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return res.json({ rows: data || [] });
+    } catch (err) {
+        logger.error(`[admin] exportAssessments failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to export assessments.' });
+    }
+}
+
 // ── PATCH /api/admin/assessments/:id/status ─────────────────────────────────
 const VALID_ASSESSMENT_STATUSES = ['new', 'reviewed', 'plan_sent', 'completed', 'archived'];
 export async function updateAssessmentStatus(req, res) {
@@ -409,6 +434,19 @@ export async function getDashboard(req, res) {
         });
         const coachingTypeSplit = Object.entries(coachingCounts).map(([name, value]) => ({ name, value }));
 
+        const revenueByCoaching = {};
+        paidEnrollments.forEach((e) => {
+            const k = e.coaching_type || 'unknown';
+            revenueByCoaching[k] = (revenueByCoaching[k] || 0) + (Number(e.amount_paid) || 0);
+        });
+        const revenueByCoachingType = Object.entries(revenueByCoaching).map(([name, value]) => ({ name, value: Math.round(value) }));
+
+        // new-vs-returning style: coupon usage over time isn't needed; add this instead:
+        const conversionRate = (assessments || []).length
+            ? Math.round((paidEnrollments.length / (assessments || []).length) * 100)
+            : null;
+
+
         // ── Plan type split ───────────────────────────────────────────────────
         const planCounts = {};
         paidEnrollments.forEach((e) => {
@@ -478,6 +516,7 @@ export async function getDashboard(req, res) {
                 avgCommitment,
                 totalEnrollmentsAllTime: totalEnrollments || 0,
                 totalAssessmentsAllTime: totalAssessments || 0,
+                conversionRate
             },
             charts: {
                 revenueTrend,
@@ -485,6 +524,7 @@ export async function getDashboard(req, res) {
                 planTypeSplit,
                 durationSplit,
                 assessmentStatusSplit,
+                revenueByCoachingType
             },
             recentActivity,
         });

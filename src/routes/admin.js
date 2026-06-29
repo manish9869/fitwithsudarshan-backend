@@ -19,7 +19,7 @@ import {
     upsertNote,
     getDashboard,
 } from '../controllers/adminDataController.js';
-
+import { exportAssessments } from '../controllers/adminDataController.js';
 const router = Router();
 
 // Stricter limiter on login to slow down brute-force attempts
@@ -38,6 +38,7 @@ router.post('/login', loginLimiter, adminLogin);
 router.use(requireAdminAuth);
 
 router.get('/me', adminMe);
+router.get('/assessments/export', exportAssessments);
 router.post('/change-password', adminChangePassword);
 
 router.get('/dashboard', getDashboard);
