@@ -1,5 +1,6 @@
 import './config/env.js'; // Load + validate env first
 import express from 'express';
+import "dotenv/config";
 import { config } from './config/env.js';
 import logger from './config/logger.js';
 import {
@@ -11,9 +12,10 @@ import {
 import { requestLogger } from './middleware/requestLogger.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 import paymentRoutes from './routes/payment.js';
+import adminRoutes from './routes/admin.js'; // ← NEW
 
 const app = express();
-
+console.log(process.env.PORT);
 // ── Trust proxy (required for rate limiting behind Vercel/Render/nginx) ───────
 app.set('trust proxy', 1);
 
@@ -32,6 +34,7 @@ app.use(requestLogger);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', paymentRoutes);
+app.use('/api/admin', adminRoutes); // ← NEW
 
 // ── 404 + error handlers (must be last) ──────────────────────────────────────
 app.use(notFound);
