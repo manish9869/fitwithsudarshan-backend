@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Invoice {{invoiceNumber}}</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f5f7;
+            color: #141414;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        body {
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            background: #f4f5f7;
+            padding: 18mm;
+            position: relative;
+        }
+
+        .invoice {
+            min-height: 261mm;
+            background: #ffffff;
+            border-radius: 18px;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+            position: relative;
+        }
+
+        .top-bar {
+            height: 5px;
+            background: linear-gradient(90deg, #e71763, #ff5a95);
+        }
+
+        .header {
+            padding: 26px 30px 22px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid #eef0f3;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo {
+            width: 66px;
+            height: 66px;
+            border-radius: 16px;
+            object-fit: cover;
+            display: block;
+            border: 1px solid #ececec;
+            background: #050505;
+        }
+
+        .brand-name {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 900;
+            letter-spacing: -0.7px;
+            color: #111827;
+        }
+
+        .brand-name span {
+            color: #e71763;
+        }
+
+        .brand-sub {
+            margin-top: 5px;
+            font-size: 10px;
+            letter-spacing: 1.6px;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 800;
+        }
+
+        .invoice-head {
+            text-align: right;
+        }
+
+        .invoice-label {
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 1.8px;
+            text-transform: uppercase;
+            color: #9ca3af;
+            margin-bottom: 6px;
+        }
+
+        .invoice-title {
+            margin: 0;
+            font-size: 38px;
+            line-height: 1;
+            font-weight: 900;
+            letter-spacing: -1.5px;
+            color: #111827;
+        }
+
+        .invoice-no {
+            margin-top: 9px;
+            color: #6b7280;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .paid-badge {
+            margin-top: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 11px;
+            border-radius: 999px;
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .paid-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: #10b981;
+        }
+
+        .content {
+            padding: 24px 30px 92px;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: 1.08fr 1.08fr 0.84fr;
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .meta-card {
+            border: 1px solid #edf0f3;
+            background: #fafafa;
+            border-radius: 14px;
+            padding: 15px;
+            min-height: 112px;
+        }
+
+        .label {
+            color: #e71763;
+            font-size: 9px;
+            font-weight: 900;
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+            margin-bottom: 9px;
+        }
+
+        .strong {
+            color: #111827;
+            font-size: 13px;
+            font-weight: 900;
+            margin-bottom: 6px;
+        }
+
+        .muted {
+            color: #6b7280;
+            font-size: 10.5px;
+            line-height: 1.6;
+            word-break: break-word;
+        }
+
+        .status-paid {
+            color: #047857;
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .reference-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            border: 1px solid #edf0f3;
+            border-radius: 14px;
+            overflow: hidden;
+            margin-bottom: 18px;
+        }
+
+        .reference-cell {
+            padding: 13px 14px;
+            border-right: 1px solid #edf0f3;
+            background: #ffffff;
+        }
+
+        .reference-cell:last-child {
+            border-right: none;
+        }
+
+        .reference-label {
+            color: #9ca3af;
+            font-size: 8.5px;
+            font-weight: 900;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .reference-value {
+            color: #111827;
+            font-size: 10px;
+            font-weight: 800;
+            word-break: break-all;
+        }
+
+        .invoice-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            overflow: hidden;
+            border-radius: 14px;
+            border: 1px solid #e5e7eb;
+            margin-bottom: 18px;
+        }
+
+        .invoice-table thead {
+            background: #111827;
+        }
+
+        .invoice-table th {
+            padding: 12px 14px;
+            text-align: left;
+            color: #ffffff;
+            font-size: 9px;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            font-weight: 900;
+        }
+
+        .invoice-table th:last-child,
+        .invoice-table td:last-child {
+            text-align: right;
+        }
+
+        .invoice-table tbody td {
+            padding: 15px 14px;
+            vertical-align: top;
+            color: #4b5563;
+            font-size: 11px;
+            border-bottom: 1px solid #eef0f3;
+        }
+
+        .invoice-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .item-title {
+            color: #111827;
+            font-size: 13px;
+            font-weight: 900;
+            margin-bottom: 4px;
+        }
+
+        .item-sub {
+            color: #6b7280;
+            font-size: 10px;
+            line-height: 1.45;
+        }
+
+        .amount-original {
+            display: block;
+            color: #9ca3af;
+            font-size: 10px;
+            text-decoration: line-through;
+            margin-bottom: 4px;
+        }
+
+        .amount-final {
+            color: #111827;
+            font-size: 13px;
+            font-weight: 900;
+        }
+
+        .discount-row td {
+            background: #fff7ed;
+            color: #92400e;
+            padding-top: 10px;
+            padding-bottom: 10px;
+        }
+
+        .discount-label {
+            font-weight: 900;
+            color: #92400e;
+        }
+
+        .discount-code {
+            color: #b45309;
+            font-weight: 800;
+        }
+
+        .discount-amount {
+            color: #047857;
+            font-weight: 900;
+        }
+
+        .below-table {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 18px;
+            align-items: start;
+        }
+
+        .notes-card {
+            border: 1px solid #edf0f3;
+            border-radius: 14px;
+            padding: 15px;
+            background: #fafafa;
+            min-height: 128px;
+        }
+
+        .notes-title {
+            color: #111827;
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-bottom: 10px;
+        }
+
+        .note-line {
+            display: flex;
+            gap: 8px;
+            color: #6b7280;
+            font-size: 10.5px;
+            line-height: 1.5;
+            margin-bottom: 7px;
+        }
+
+        .note-line:last-child {
+            margin-bottom: 0;
+        }
+
+        .bullet {
+            width: 5px;
+            height: 5px;
+            border-radius: 999px;
+            background: #e71763;
+            margin-top: 6px;
+            flex-shrink: 0;
+        }
+
+        .summary {
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            overflow: hidden;
+            background: #ffffff;
+        }
+
+        .summary-title {
+            padding: 12px 14px;
+            background: #f9fafb;
+            border-bottom: 1px solid #edf0f3;
+            color: #111827;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 11px 14px;
+            border-bottom: 1px solid #edf0f3;
+            color: #6b7280;
+            font-size: 11px;
+        }
+
+        .summary-row strong {
+            color: #111827;
+            font-weight: 900;
+            text-align: right;
+        }
+
+        .summary-row.discount {
+            background: #fff7ed;
+            color: #92400e;
+        }
+
+        .summary-row.discount strong {
+            color: #047857;
+        }
+
+        .summary-row.total {
+            border-bottom: none;
+            background: #e71763;
+            color: #ffffff;
+            padding: 14px;
+            font-size: 13px;
+            font-weight: 900;
+        }
+
+        .summary-row.total strong {
+            color: #ffffff;
+            font-size: 17px;
+        }
+
+        .footer {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 14px 30px 18px;
+            background: #ffffff;
+            border-top: 1px solid #edf0f3;
+            text-align: center;
+        }
+
+        .footer-main {
+            color: #4b5563;
+            font-size: 9.5px;
+            font-weight: 800;
+            margin-bottom: 5px;
+        }
+
+        .footer-sub {
+            color: #9ca3af;
+            font-size: 8.5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+        <div class="invoice">
+            <div class="top-bar"></div>
+
+            <header class="header">
+                <div class="brand">
+                    <img class="logo" src="{{logoUrl}}" alt="FitWithSudarshan Logo" />
+
+                    <div>
+                        <h2 class="brand-name">FitWith<span>Sudarshan</span></h2>
+                        <div class="brand-sub">RECODE™ Transformation Program</div>
+                    </div>
+                </div>
+
+                <div class="invoice-head">
+                    <div class="invoice-label">Payment Receipt</div>
+                    <h1 class="invoice-title">INVOICE</h1>
+                    <div class="invoice-no">No. {{invoiceNumber}}</div>
+
+                    <div class="paid-badge">
+                        <span class="paid-dot"></span>
+                        Paid
+                    </div>
+                </div>
+            </header>
+
+            <main class="content">
+                <section class="meta-grid">
+                    <div class="meta-card">
+                        <div class="label">From</div>
+                        <div class="strong">FitWithSudarshan</div>
+                        <div class="muted">RECODE™ Transformation Program</div>
+                        <div class="muted">Mumbai, Maharashtra, India</div>
+                        <div class="muted">Fitwithsudarshanofficial@gmail.com</div>
+                        <div class="muted">+91 96197 08124</div>
+                    </div>
+
+                    <div class="meta-card">
+                        <div class="label">Bill To</div>
+                        <div class="strong">{{customerName}}</div>
+                        <div class="muted">{{customerEmail}}</div>
+                        <div class="muted">{{customerPhone}}</div>
+                    </div>
+
+                    <div class="meta-card">
+                        <div class="label">Invoice Date</div>
+                        <div class="strong">{{invoiceDate}}</div>
+
+                        <div style="height: 12px;"></div>
+
+                        <div class="label">Payment Status</div>
+                        <div class="status-paid">Verified & Paid</div>
+                    </div>
+                </section>
+
+                <section class="reference-grid">
+                    <div class="reference-cell">
+                        <div class="reference-label">Enrollment ID</div>
+                        <div class="reference-value">{{enrollmentId}}</div>
+                    </div>
+
+                    <div class="reference-cell">
+                        <div class="reference-label">Payment ID</div>
+                        <div class="reference-value">{{razorpayPaymentId}}</div>
+                    </div>
+
+                    <div class="reference-cell">
+                        <div class="reference-label">Order ID</div>
+                        <div class="reference-value">{{razorpayOrderId}}</div>
+                    </div>
+                </section>
+
+                <table class="invoice-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 48%;">Description</th>
+                            <th>Type</th>
+                            <th>Duration</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        <tr>
+                            <td>
+                                <div class="item-title">RECODE™ Coaching Plan</div>
+                                <div class="item-sub">Personalized workout, nutrition and transformation coaching.</div>
+                            </td>
+
+                            <td>{{coachingType}}</td>
+                            <td>{{durationText}}</td>
+
+                            <td>
+                                {{originalAmountLine}}
+                                <span class="amount-final">{{amountPaid}}</span>
+                            </td>
+                        </tr>
+
+                        {{discountTableRow}}
+                    </tbody>
+                </table>
+
+                <section class="below-table">
+                    <div class="notes-card">
+                        <div class="notes-title">Invoice Notes</div>
+
+                        <div class="note-line">
+                            <span class="bullet"></span>
+                            <span>This invoice confirms payment received for the selected coaching program.</span>
+                        </div>
+
+                        <div class="note-line">
+                            <span class="bullet"></span>
+                            <span>Program access and onboarding communication will be shared through registered contact details.</span>
+                        </div>
+
+                        <div class="note-line">
+                            <span class="bullet"></span>
+                            <span>This is a system-generated invoice and does not require a physical signature.</span>
+                        </div>
+                    </div>
+
+                    <div class="summary">
+                        <div class="summary-title">Payment Summary</div>
+
+                        {{summaryRows}}
+
+                        <div class="summary-row">
+                            <span>GST / Tax</span>
+                            <strong>Included</strong>
+                        </div>
+
+                        <div class="summary-row total">
+                            <span>Total Paid</span>
+                            <strong>{{amountPaid}}</strong>
+                        </div>
+                    </div>
+                </section>
+            </main>
+
+            <footer class="footer">
+                <div class="footer-main">
+                    FitWithSudarshan · Fitwithsudarshanofficial@gmail.com · +91 96197 08124 · Mumbai, India
+                </div>
+                <div class="footer-sub">
+                    Invoice generated electronically for payment reference and record keeping.
+                </div>
+            </footer>
+        </div>
+    </div>
+</body>
+</html>

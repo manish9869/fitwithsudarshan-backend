@@ -78,20 +78,28 @@ export function healthCheck(_req, res) {
     });
 }
 
-
-export function downloadInvoice(req, res, next) {
+export async function downloadInvoice(req, res, next) {
     try {
         const enrollment = req.body;
-        if (!enrollment?.enrollmentId) {
-            return res.status(400).json({ error: 'Invalid enrollment data.' });
+
+        if (!enrollment?.enrollmentId && !enrollment?.enrollment_id) {
+            return res.status(400).json({
+                error: 'Invalid enrollment data.',
+            });
         }
-        const buffer = generateInvoiceBuffer(enrollment);
+
+        const buffer = await generateInvoiceBuffer(enrollment);
+
+        const invoiceId = enrollment.enrollmentId || enrollment.enrollment_id;
+
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader(
             'Content-Disposition',
-            `attachment; filename="RECODE-Invoice-${enrollment.enrollmentId}.pdf"`
+            `attachment; filename="RECODE-Invoice-${invoiceId}.pdf"`
         );
-        res.send(buffer);
+        res.setHeader('Content-Length', buffer.length);
+
+        return res.send(buffer);
     } catch (err) {
         next(err);
     }
