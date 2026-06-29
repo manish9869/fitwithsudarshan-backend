@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import puppeteer from 'puppeteer';
+import { launchBrowser } from './puppeteerBrowser.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -155,18 +155,13 @@ export async function generateInvoiceBuffer(enrollment) {
     try {
         const html = await buildInvoiceHtml(enrollment);
 
-        browser = await puppeteer.launch({
-            headless: 'new',
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-            ],
-        });
+        browser = await launchBrowser();
 
         const page = await browser.newPage();
 
         await page.setContent(html, {
             waitUntil: 'networkidle0',
+            timeout: 30000,
         });
 
         const pdfBuffer = await page.pdf({
