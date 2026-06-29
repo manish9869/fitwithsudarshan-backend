@@ -16,6 +16,10 @@
  *   - Customer email is sent to `email` field (added to form) OR skipped gracefully
  *   - Signed URLs are generated for ALL file types (image + PDF blood reports)
  *   - Photo/report URLs are passed as direct download links
+ *   - photoFront / photoSide are now OPTIONAL — submission no longer blocks
+ *     if either (or both) is missing. assessmentService.uploadFile() already
+ *     returns null for a missing file, so the rest of the pipeline (DB insert,
+ *     email rendering) handles absent photos gracefully without changes.
  */
 
 import multer from 'multer';
@@ -48,6 +52,8 @@ export const assessmentUpload = upload.fields([
 ]);
 
 // ── Required fields ───────────────────────────────────────────────────────────
+// Note: photoFront / photoSide are intentionally NOT in this list — they're
+// optional uploads, validated (or rather, not validated) separately below.
 const REQUIRED_FIELDS = [
     'firstName', 'whatsapp', 'age', 'gender', 'city', 'plan',
     'currentWeight', 'height', 'mainGoal', 'desiredResult', 'whyNow',
@@ -86,7 +92,10 @@ async function sendAssessmentEmails(assessmentRow) {
 
     // Generate signed URLs so the coach can download photos/PDF from email.
     // Supabase signed URLs work for both images AND PDFs — they are direct
-    // download/view links that expire after 7 days.
+    // download/view links that expire after 7 days. Paths that are null
+    // (because a photo wasn't uploaded) simply resolve to a null URL —
+    // getSignedFileUrl() already early-returns null for a falsy path, so
+    // this is safe with zero, one, or all three files missing.
     let fileUrls = { photoFrontUrl: null, photoSideUrl: null, bloodReportUrl: null };
     try {
         fileUrls = await getSignedFileUrls({
@@ -165,9 +174,10 @@ export async function submitAssessmentHandler(req, res, next) {
             bloodReport: req.files?.bloodReport?.[0],
         };
 
-        if (!files.photoFront || !files.photoSide) {
-            return res.status(400).json({ error: 'Front and side photos are required.' });
-        }
+        // photoFront / photoSide are optional — submission proceeds with
+        // whatever subset of files (including none) was actually uploaded.
+        // submitAssessment() → uploadFile() already returns null for any
+        // missing file, so the DB row simply stores a null path for it.
 
         const { row } = await submitAssessment(req.body, files);
 
