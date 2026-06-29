@@ -1,8 +1,10 @@
 /**
- * FIXED: inject() now properly returns the processed HTML
- * and handles {{placeholder}} token replacement.
+ * src/services/emailTemplates.js
  *
- * Replace your src/services/emailTemplates.js with this file.
+ * Performance improvements vs original:
+ *   - Templates are read from disk ONCE and cached in memory.
+ *     Previously readFileSync was called on every renderTemplate() invocation.
+ *   - inject() is unchanged functionally.
  */
 
 import fs from 'fs';
@@ -11,6 +13,34 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.resolve(__dirname, '../templates');
+
+// ── Template cache — populated lazily, lives for the lifetime of the process ─
+const _templateCache = new Map();
+
+function readTemplate(name) {
+    if (_templateCache.has(name)) return _templateCache.get(name);
+
+    const filePath = path.join(TEMPLATES_DIR, `${name}.html`);
+    if (!fs.existsSync(filePath)) {
+        throw new Error(`Template file not found: ${filePath}`);
+    }
+    const content = fs.readFileSync(filePath, 'utf-8');
+    _templateCache.set(name, content);
+    return content;
+}
+
+// Pre-warm the cache at module load time so the first request isn't slower.
+// Any template that fails to load (e.g. file genuinely missing) is logged but
+// does not crash the server on boot.
+const KNOWN_TEMPLATES = [
+    'enrollment_coach', 'enrollment_customer', 'welcome',
+    'payment_failed', 'payment_reminder',
+    'contact_inquiry_coach', 'contact_inquiry_customer',
+    'assessment_coach', 'assessment_customer',
+];
+for (const name of KNOWN_TEMPLATES) {
+    try { readTemplate(name); } catch { /* not fatal at boot */ }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -38,23 +68,8 @@ function fmtDate(iso) {
     }).format(d);
 }
 
-function readTemplate(name) {
-    const filePath = path.join(TEMPLATES_DIR, `${name}.html`);
-    if (!fs.existsSync(filePath)) {
-        throw new Error(`Template file not found: ${filePath}`);
-    }
-    return fs.readFileSync(filePath, 'utf-8');
-}
-
-/**
- * FIX: inject() was previously defined but never returned anything.
- * Now it:
- *   1. Handles {{#if key}}...{{/if}} and {{#if key}}...{{else}}...{{/if}} blocks
- *   2. Replaces all {{key}} tokens with values from data
- *   3. Returns the fully processed HTML string
- */
 function inject(html, data) {
-    // 1. Handle {{#if key}}...{{else}}...{{/if}} and {{#if key}}...{{/if}} blocks
+    // 1. Handle {{#if key}}...{{else}}...{{/if}} blocks
     html = html.replace(/\{\{#if (\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_, key, block) => {
         const elseSplit = block.match(/^([\s\S]*?)\{\{else\}\}([\s\S]*)$/);
         if (elseSplit) {
@@ -64,7 +79,7 @@ function inject(html, data) {
         return data[key] ? block : '';
     });
 
-    // 2. Replace all {{key}} tokens — unknown keys fall back to '—'
+    // 2. Replace all {{key}} tokens
     html = html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
         const val = data[key];
         if (val === undefined || val === null) return '—';
@@ -72,7 +87,6 @@ function inject(html, data) {
         return String(val);
     });
 
-    // 3. ✅ RETURN the processed HTML (this was missing before)
     return html;
 }
 
@@ -241,7 +255,6 @@ const templateBuilders = {
         });
         return { subject, html };
     },
-
 };
 
 // ── Public API ────────────────────────────────────────────────────────────────
