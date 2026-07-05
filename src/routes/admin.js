@@ -20,6 +20,11 @@ import {
     getDashboard,
 } from '../controllers/adminDataController.js';
 import { exportAssessments } from '../controllers/adminDataController.js';
+
+import {
+    adminListCoupons, adminCreateCoupon, adminUpdateCoupon, adminDeleteCoupon,
+} from '../controllers/couponController.js';
+
 const router = Router();
 
 // Stricter limiter on login to slow down brute-force attempts
@@ -53,5 +58,12 @@ router.get('/assessments/:id', getAssessment);
 router.patch('/assessments/:id/status', updateAssessmentStatus);
 
 router.put('/notes', upsertNote);
+
+router.get('/coupons', adminListCoupons);
+router.post('/coupons', adminCreateCoupon);
+router.patch('/coupons/:id', adminUpdateCoupon);
+router.delete('/coupons/:id', adminDeleteCoupon);
+
+
 
 export default router;
