@@ -3,6 +3,7 @@ import { createOrder, verifyPayment, healthCheck, downloadInvoice } from '../con
 import { sendEmail, sendEnrollmentEmails } from '../controllers/emailController.js';
 import { paymentLimiter } from '../middleware/security.js';
 import { assessmentUpload, submitAssessmentHandler } from '../controllers/assessmentController.js';
+import { validateCoupon, redeemCoupon } from '../controllers/couponController.js';
 
 const router = Router();
 
@@ -30,5 +31,9 @@ router.post('/invoice', downloadInvoice);
 // req.body and req.files are populated.
 router.post('/submit-assessment', assessmentUpload, submitAssessmentHandler);
 
+
+router.post('/coupons/validate', paymentLimiter, validateCoupon);
+
+router.post('/coupons/redeem', paymentLimiter, redeemCoupon);
 
 export default router;
