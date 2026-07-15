@@ -24,7 +24,13 @@ import { exportAssessments } from '../controllers/adminDataController.js';
 import {
     adminListCoupons, adminCreateCoupon, adminUpdateCoupon, adminDeleteCoupon,
 } from '../controllers/couponController.js';
-
+import {
+    createManualEnrollment,
+    sendEnrollmentEmail,
+    listFollowUps,
+    followUpsDueCount,
+    markFollowUp,
+} from '../controllers/manualEnrollmentController.js';
 const router = Router();
 
 // Stricter limiter on login to slow down brute-force attempts
@@ -64,6 +70,11 @@ router.post('/coupons', adminCreateCoupon);
 router.patch('/coupons/:id', adminUpdateCoupon);
 router.delete('/coupons/:id', adminDeleteCoupon);
 
+router.post('/enrollments/manual', createManualEnrollment);
+router.post('/enrollments/:id/send-email', sendEnrollmentEmail);
 
+router.get('/follow-ups', listFollowUps);
+router.get('/follow-ups/count', followUpsDueCount);
+router.post('/enrollments/:id/followup', markFollowUp);
 
 export default router;

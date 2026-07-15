@@ -21,8 +21,8 @@ import logger from '../config/logger.js';
 import { generateInvoiceBuffer } from '../services/invoiceService.js';
 
 // ── Reusable transporter ──────────────────────────────────────────────────────
-let _transporter = null;
-function getTransporter() {
+export let _transporter = null;
+export function getTransporter() {
   if (!_transporter) {
     _transporter = nodemailer.createTransport({
       service: 'gmail',
