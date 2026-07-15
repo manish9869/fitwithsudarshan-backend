@@ -167,6 +167,9 @@ export async function exportEnrollments(req, res) {
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── GET /api/admin/assessments ──────────────────────────────────────────────
+// Query params now also accept `reviewed` ('true' | 'false') so the frontend
+// can filter to "not yet reviewed" — this is what powers the dashboard's
+// "Today's To-Do" list and the Assessments page filter.
 export async function listAssessments(req, res) {
     try {
         const supabase = getSupabaseAdmin();
@@ -174,13 +177,14 @@ export async function listAssessments(req, res) {
             search = '',
             status = 'all',
             plan = 'all',
+            reviewed,
             sortField = 'created_at',
             sortDir = 'desc',
             page = 1,
             pageSize = PAGE_SIZE_DEFAULT,
         } = req.query;
 
-        const ALLOWED_SORT = new Set(['created_at', 'first_name', 'status', 'commitment', 'plan']);
+        const ALLOWED_SORT = new Set(['created_at', 'first_name', 'status', 'commitment', 'plan', 'reviewed']);
         const sortF = ALLOWED_SORT.has(sortField) ? sortField : 'created_at';
         const ps = clampPageSize(pageSize);
         const pg = Math.max(1, parseInt(page, 10) || 1);
@@ -195,6 +199,9 @@ export async function listAssessments(req, res) {
         }
         if (status !== 'all') query = query.eq('status', status);
         if (plan !== 'all') query = query.eq('plan', plan);
+
+        if (reviewed === 'true') query = query.eq('reviewed', true);
+        else if (reviewed === 'false') query = query.eq('reviewed', false);
 
         query = query
             .order(sortF, { ascending: sortDir === 'asc' })
@@ -303,6 +310,36 @@ export async function updateAssessmentStatus(req, res) {
     }
 }
 
+// ── PATCH /api/admin/assessments/:id/reviewed ───────────────────────────────
+// NEW: standalone "reviewed" flag, independent of the status pipeline.
+// Body: { reviewed: boolean }
+// This is what the frontend's ReviewedToggle / setAssessmentReviewed() call
+// and the dashboard's "Today's To-Do" list depend on — previously missing.
+export async function updateAssessmentReviewed(req, res) {
+    try {
+        const { reviewed } = req.body || {};
+        if (typeof reviewed !== 'boolean') {
+            return res.status(400).json({ error: '`reviewed` must be a boolean (true or false).' });
+        }
+
+        const supabase = getSupabaseAdmin();
+        const { data, error } = await supabase
+            .from('assessments')
+            .update({ reviewed })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error || !data) return res.status(404).json({ error: 'Assessment not found.' });
+
+        logger.info(`[admin] ${req.admin.username} set assessment ${data.id} reviewed=${reviewed}`);
+        return res.json({ assessment: data });
+    } catch (err) {
+        logger.error(`[admin] updateAssessmentReviewed failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to update reviewed flag.' });
+    }
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // NOTES (server-side, shared across admins — replaces localStorage notes)
 // ════════════════════════════════════════════════════════════════════════════
@@ -398,7 +435,7 @@ export async function getDashboard(req, res) {
                 .order('created_at', { ascending: true }),
             supabase
                 .from('assessments')
-                .select('id, status, plan, commitment, created_at, first_name, last_name')
+                .select('id, status, plan, commitment, reviewed, created_at, first_name, last_name')
                 .gte('created_at', since)
                 .order('created_at', { ascending: true }),
             supabase.from('enrollments').select('id', { count: 'exact', head: true }),
@@ -483,6 +520,10 @@ export async function getDashboard(req, res) {
             ? commitmentScores.reduce((s, c) => s + c, 0) / commitmentScores.length
             : null;
 
+        // ── Reviewed vs pending assessments ──────────────────────────────────
+        const reviewedCount = (assessments || []).filter((a) => a.reviewed).length;
+        const pendingReviewCount = (assessments || []).length - reviewedCount;
+
         // ── Recent activity feed (mixed enrollments + assessments) ──────────
         const recentEnrollments = (enrollments || [])
             .slice(-8)
@@ -524,6 +565,8 @@ export async function getDashboard(req, res) {
                 totalAssessmentsAllTime: totalAssessments || 0,
                 conversionRate,
                 followUpsDue: followUpsDue || 0,
+                reviewedCount,
+                pendingReviewCount,
             },
             charts: {
                 revenueTrend,

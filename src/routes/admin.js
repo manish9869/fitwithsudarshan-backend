@@ -16,6 +16,7 @@ import {
     listAssessments,
     getAssessment,
     updateAssessmentStatus,
+    updateAssessmentReviewed,
     upsertNote,
     getDashboard,
 } from '../controllers/adminDataController.js';
@@ -63,6 +64,7 @@ router.patch('/enrollments/:id/status', updateEnrollmentStatus);
 router.get('/assessments', listAssessments);
 router.get('/assessments/:id', getAssessment);
 router.patch('/assessments/:id/status', updateAssessmentStatus);
+router.patch('/assessments/:id/reviewed', updateAssessmentReviewed);
 
 router.put('/notes', upsertNote);
 
