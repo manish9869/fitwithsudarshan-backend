@@ -26,6 +26,7 @@ import {
 } from '../controllers/couponController.js';
 import {
     createManualEnrollment,
+    updateManualEnrollment,
     sendEnrollmentEmail,
     listFollowUps,
     followUpsDueCount,
@@ -71,6 +72,7 @@ router.patch('/coupons/:id', adminUpdateCoupon);
 router.delete('/coupons/:id', adminDeleteCoupon);
 
 router.post('/enrollments/manual', createManualEnrollment);
+router.patch('/enrollments/manual/:id', updateManualEnrollment);
 router.post('/enrollments/:id/send-email', sendEnrollmentEmail);
 
 router.get('/follow-ups', listFollowUps);
