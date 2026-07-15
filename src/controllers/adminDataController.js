@@ -402,10 +402,16 @@ export async function getDashboard(req, res) {
                 .gte('created_at', since)
                 .order('created_at', { ascending: true }),
             supabase.from('enrollments').select('id', { count: 'exact', head: true }),
-            supabase.from('assessments').select('id', { count: 'exact', head: true }),
+            supabase.from('assessments').select('id', { count: 'exact', head: true })
         ]);
 
         if (e1 || e2 || e3 || e4) throw (e1 || e2 || e3 || e4);
+        const { count: followUpsDue, error: e5 } = await supabase
+            .from('enrollments')
+            .select('id', { count: 'exact', head: true })
+            .eq('followup_status', 'active')
+            .eq('payment_status', 'paid')
+            .lte('next_followup_at', new Date().toISOString());
 
         const paidEnrollments = (enrollments || []).filter((e) => (e.payment_status || 'paid') === 'paid');
 
@@ -516,7 +522,8 @@ export async function getDashboard(req, res) {
                 avgCommitment,
                 totalEnrollmentsAllTime: totalEnrollments || 0,
                 totalAssessmentsAllTime: totalAssessments || 0,
-                conversionRate
+                conversionRate,
+                followUpsDue: followUpsDue || 0,
             },
             charts: {
                 revenueTrend,
