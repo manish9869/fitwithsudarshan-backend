@@ -42,6 +42,17 @@ function toTemplateData(row) {
     };
 }
 
+// ── Templates selectable from the admin panel for an enrollment record ──────
+// `recipient` decides whether the email goes to the customer on file or to
+// the coach inbox — used both here and by the frontend EmailSendMenu.
+export const ENROLLMENT_EMAIL_TEMPLATES = {
+    enrollment_customer: { recipient: 'customer', label: 'Enrollment Confirmation' },
+    welcome: { recipient: 'customer', label: 'Welcome / Onboarding' },
+    payment_reminder: { recipient: 'customer', label: 'Payment Reminder' },
+    payment_failed: { recipient: 'customer', label: 'Payment Failed Notice' },
+    enrollment_coach: { recipient: 'coach', label: 'New Enrollment Alert (Coach)' },
+};
+
 // ── POST /api/admin/enrollments/manual ───────────────────────────────────────
 export async function createManualEnrollment(req, res) {
     try {
@@ -178,7 +189,8 @@ export async function updateManualEnrollment(req, res) {
 }
 
 // ── POST /api/admin/enrollments/:id/send-email ──────────────────────────────
-// body: { type: 'customer' | 'coach' | 'both' }  — default 'customer'
+// Preferred body: { template: 'enrollment_customer' | 'welcome' | 'payment_reminder' | 'payment_failed' | 'enrollment_coach' }
+// Legacy body (still supported): { type: 'customer' | 'coach' | 'both' }
 export async function sendEnrollmentEmail(req, res) {
     try {
         const supabase = getSupabaseAdmin();
@@ -190,8 +202,30 @@ export async function sendEnrollmentEmail(req, res) {
 
         if (error || !row) return res.status(404).json({ error: 'Enrollment not found.' });
 
-        const type = req.body?.type || 'customer';
-        if ((type === 'customer' || type === 'both') && !row.customer_email) {
+        let templates = [];
+
+        if (req.body?.template) {
+            const tmpl = req.body.template;
+            if (!ENROLLMENT_EMAIL_TEMPLATES[tmpl]) {
+                return res.status(400).json({
+                    error: `Unknown template "${tmpl}". Valid: ${Object.keys(ENROLLMENT_EMAIL_TEMPLATES).join(', ')}`,
+                });
+            }
+            templates = [tmpl];
+        } else {
+            // Legacy fallback for any older callers still sending { type }
+            const type = req.body?.type || 'customer';
+            if (type === 'customer') templates = ['enrollment_customer'];
+            else if (type === 'coach') templates = ['enrollment_coach'];
+            else if (type === 'both') templates = ['enrollment_customer', 'enrollment_coach'];
+        }
+
+        if (!templates.length) {
+            return res.status(400).json({ error: 'No valid template resolved from request.' });
+        }
+
+        const needsCustomerEmail = templates.some((t) => ENROLLMENT_EMAIL_TEMPLATES[t].recipient === 'customer');
+        if (needsCustomerEmail && !row.customer_email) {
             return res.status(400).json({ error: 'This enrollment has no customer email on file.' });
         }
 
@@ -204,30 +238,21 @@ export async function sendEnrollmentEmail(req, res) {
         const coachEmail = config.email.coachEmail || config.email.gmailUser;
         const sent = [];
 
-        if (type === 'customer' || type === 'both') {
-            const { subject, html } = renderTemplate('enrollment_customer', templateData);
+        for (const tmpl of templates) {
+            const { subject, html } = renderTemplate(tmpl, templateData);
+            const recipient = ENROLLMENT_EMAIL_TEMPLATES[tmpl].recipient === 'coach' ? coachEmail : row.customer_email;
+
             await transporter.sendMail({
                 from: `"RECODE™ by FitWithSudarshan" <${config.email.gmailUser}>`,
-                to: row.customer_email,
+                to: recipient,
                 replyTo: coachEmail,
                 subject,
                 html,
             });
-            sent.push('customer');
+            sent.push(tmpl);
         }
 
-        if (type === 'coach' || type === 'both') {
-            const { subject, html } = renderTemplate('enrollment_coach', templateData);
-            await transporter.sendMail({
-                from: `"RECODE™ by FitWithSudarshan" <${config.email.gmailUser}>`,
-                to: coachEmail,
-                subject,
-                html,
-            });
-            sent.push('coach');
-        }
-
-        logger.info(`[admin] ${req.admin.username} manually sent enrollment email(s) [${sent.join(', ')}] for ${row.enrollment_id}`);
+        logger.info(`[admin] ${req.admin.username} manually sent [${sent.join(', ')}] for ${row.enrollment_id}`);
         return res.json({ success: true, sent });
     } catch (err) {
         logger.error(`[admin] sendEnrollmentEmail failed: ${err.message}`);
