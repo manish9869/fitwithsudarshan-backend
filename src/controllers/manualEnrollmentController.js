@@ -107,6 +107,76 @@ export async function createManualEnrollment(req, res) {
     }
 }
 
+// ── PATCH /api/admin/enrollments/manual/:id ──────────────────────────────────
+// Lets the admin edit a manual enrollment (or any enrollment) after creation.
+export async function updateManualEnrollment(req, res) {
+    try {
+        const b = req.body || {};
+
+        if (!b.customerName || !b.programName || b.amountPaid == null) {
+            return res.status(400).json({ error: 'customerName, programName and amountPaid are required.' });
+        }
+
+        const supabase = getSupabaseAdmin();
+
+        const { data: existing, error: fetchErr } = await supabase
+            .from('enrollments')
+            .select('id')
+            .eq('id', req.params.id)
+            .single();
+
+        if (fetchErr || !existing) {
+            return res.status(404).json({ error: 'Enrollment not found.' });
+        }
+
+        const update = {
+            customer_name: b.customerName,
+            customer_email: b.customerEmail || null,
+            customer_phone: b.customerPhone || null,
+            program_name: b.programName,
+            plan_type: b.planType || 'individual',
+            coaching_type: b.coachingType || 'online',
+            duration_months: b.durationMonths || null,
+            amount_paid: Number(b.amountPaid),
+            original_amount: b.originalAmount != null ? Number(b.originalAmount) : Number(b.amountPaid),
+            coupon_code: b.couponCode || null,
+            coupon_savings: b.couponSavings ? Number(b.couponSavings) : 0,
+            razorpay_payment_id: b.paymentReference || null,
+            payment_date: b.paymentDate ? new Date(b.paymentDate).toISOString() : new Date().toISOString(),
+            payment_status: b.paymentStatus || 'paid',
+            age: b.age || null,
+            city: b.city || null,
+            weight: b.weight || null,
+            goals: Array.isArray(b.goals) ? b.goals : (b.goals ? [b.goals] : []),
+            medical_issue: b.medicalIssue || null,
+            medical_note: b.medicalNote || null,
+            partner_name: b.partnerName || null,
+            partner_age: b.partnerAge || null,
+            partner_weight: b.partnerWeight || null,
+            partner_goals: Array.isArray(b.partnerGoals) ? b.partnerGoals : (b.partnerGoals ? [b.partnerGoals] : null),
+            partner_medical_issue: b.partnerMedicalIssue || null,
+            partner_medical_note: b.partnerMedicalNote || null,
+            payment_method: b.paymentMethod || 'other',
+            admin_note: b.adminNote || null,
+        };
+
+        const { data, error } = await supabase
+            .from('enrollments')
+            .update(update)
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        logger.info(`[admin] ${req.admin.username} updated manual enrollment ${data.enrollment_id}`);
+        return res.json({ enrollment: data });
+    } catch (err) {
+        logger.error(`[admin] updateManualEnrollment failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to update enrollment.' });
+    }
+}
+
 // ── POST /api/admin/enrollments/:id/send-email ──────────────────────────────
 // body: { type: 'customer' | 'coach' | 'both' }  — default 'customer'
 export async function sendEnrollmentEmail(req, res) {
