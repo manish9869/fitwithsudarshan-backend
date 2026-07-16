@@ -199,7 +199,7 @@ export async function createEnrollment(req, res, next) {
 
         // ── Fire confirmation emails from the SERVER-VERIFIED row, not the
         //    client payload. Fire-and-forget so the response isn't blocked. ──
-        _sendEnrollmentConfirmation(data).catch((e) =>
+        await _sendEnrollmentConfirmation(data).catch((e) =>
             logger.error(`[create-enrollment] email dispatch failed: ${e.message}`)
         );
 
