@@ -211,7 +211,13 @@ export async function createEnrollment(req, res, next) {
 }
 
 async function _sendEnrollmentConfirmation(row) {
-    if (!config.email.gmailUser || !config.email.gmailAppPassword) return;
+    if (!config.email.gmailUser || !config.email.gmailAppPassword) {
+        logger.warn(`[create-enrollment] Skipped confirmation emails for ${row.enrollment_id} — GMAIL_USER / GMAIL_APP_PASSWORD not set.`);
+        return;
+    }
+
+    logger.info(`[create-enrollment] Dispatching confirmation emails for ${row.enrollment_id} → coach + ${row.customer_email || 'no customer email'}`);
+
     const transporter = getTransporter();
     const coachEmail = config.email.coachEmail || config.email.gmailUser;
 
@@ -244,13 +250,13 @@ async function _sendEnrollmentConfirmation(row) {
             contentType: 'application/pdf',
         }];
     } catch (e) {
-        logger.warn(`[email] invoice generation failed: ${e.message}`);
+        logger.warn(`[create-enrollment] invoice generation failed for ${row.enrollment_id}: ${e.message}`);
     }
 
     const coachMail = renderTemplate('enrollment_coach', templateData);
     const customerMail = renderTemplate('enrollment_customer', templateData);
 
-    await Promise.allSettled([
+    const [coachResult, customerResult, couponResult] = await Promise.allSettled([
         transporter.sendMail({
             from: `"RECODE™ by FitWithSudarshan" <${config.email.gmailUser}>`,
             to: coachEmail, subject: coachMail.subject, html: coachMail.html,
@@ -262,9 +268,30 @@ async function _sendEnrollmentConfirmation(row) {
                 subject: customerMail.subject, html: customerMail.html,
                 attachments: invoiceAttachment,
             })
-            : Promise.resolve(),
+            : Promise.resolve('skipped — no customer email on file'),
         row.coupon_code ? incrementCouponUsage(row.coupon_code) : Promise.resolve(),
     ]);
+
+    // ── THIS is what was missing — actually log success/failure ──────────
+    if (coachResult.status === 'fulfilled') {
+        logger.info(`[create-enrollment] ✅ Coach email sent → ${coachEmail} (${row.enrollment_id})`);
+    } else {
+        logger.error(`[create-enrollment] ❌ Coach email FAILED for ${row.enrollment_id}: ${coachResult.reason?.message}`);
+    }
+
+    if (row.customer_email) {
+        if (customerResult.status === 'fulfilled') {
+            logger.info(`[create-enrollment] ✅ Customer email sent → ${row.customer_email} (${row.enrollment_id})`);
+        } else {
+            logger.error(`[create-enrollment] ❌ Customer email FAILED for ${row.enrollment_id}: ${customerResult.reason?.message}`);
+        }
+    } else {
+        logger.info(`[create-enrollment] ℹ️ No customer email on file — skipped for ${row.enrollment_id}`);
+    }
+
+    if (row.coupon_code && couponResult.status === 'rejected') {
+        logger.error(`[create-enrollment] ⚠️ Coupon usage increment failed for ${row.coupon_code}: ${couponResult.reason?.message}`);
+    }
 }
 
 export function healthCheck(_req, res) {
