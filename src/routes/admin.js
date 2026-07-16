@@ -33,6 +33,8 @@ import {
     followUpsDueCount,
     markFollowUp,
 } from '../controllers/manualEnrollmentController.js';
+import { getTxnTimelineHandler } from '../controllers/logController.js';
+
 const router = Router();
 
 // Stricter limiter on login to slow down brute-force attempts
@@ -80,5 +82,8 @@ router.post('/enrollments/:id/send-email', sendEnrollmentEmail);
 router.get('/follow-ups', listFollowUps);
 router.get('/follow-ups/count', followUpsDueCount);
 router.post('/enrollments/:id/followup', markFollowUp);
+
+// ── Transaction timeline viewer — GET /api/admin/txn-timeline?orderId=... ──
+router.get('/txn-timeline', getTxnTimelineHandler);
 
 export default router;
