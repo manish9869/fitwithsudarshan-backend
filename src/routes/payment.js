@@ -4,6 +4,7 @@ import { sendEmail, sendEnrollmentEmails } from '../controllers/emailController.
 import { paymentLimiter } from '../middleware/security.js';
 import { assessmentUpload, submitAssessmentHandler } from '../controllers/assessmentController.js';
 import { validateCoupon, redeemCoupon } from '../controllers/couponController.js';
+import { logClientEvent } from '../controllers/logController.js';
 
 const router = Router();
 
@@ -22,5 +23,8 @@ router.post('/submit-assessment', assessmentUpload, submitAssessmentHandler);
 
 router.post('/coupons/validate', paymentLimiter, validateCoupon);
 router.post('/coupons/redeem', paymentLimiter, redeemCoupon);
+
+// ── Transaction logging (frontend can report client-side steps) ─────────────
+router.post('/log-event', logClientEvent);
 
 export default router;
