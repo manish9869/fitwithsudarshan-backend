@@ -23,7 +23,7 @@ export const pricingTable = {
             '12': 38999,
         },
         basic_individual: {
-            '1': 1,
+            '1': 99,
         },
         basic_couple: {
             '1': 199,
