@@ -1,5 +1,5 @@
 import { createRazorpayOrder, verifyPaymentSignature, fetchRazorpayOrder, fetchRazorpayPayment } from '../utils/razorpay.js';
-import { validateVerifyPayment } from '../utils/validate.js';
+import { validateVerifyPayment, validateCreateOrder } from '../utils/validate.js';
 import { resolvePrice } from '../data/serverPricing.js';
 import { validateCouponCode, incrementCouponUsage } from '../services/couponService.js';
 import { renderTemplate } from '../services/emailTemplates.js';
@@ -8,7 +8,6 @@ import { generateInvoiceBuffer } from '../services/invoiceService.js';
 import { config } from '../config/env.js';
 import logger from '../config/logger.js';
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
-
 // ── POST /api/create-order ────────────────────────────────────────────────
 // CHANGED: client no longer sends `amount`. It sends plan selection; the
 // server resolves the real price and validates any coupon. This is the fix
@@ -17,8 +16,9 @@ export async function createOrder(req, res, next) {
     try {
         const { coachingType, planType, durationMonths, couponCode, receipt = `rcpt_${Date.now()}` } = req.body;
 
-        if (!coachingType || !planType) {
-            return res.status(400).json({ error: 'coachingType and planType are required.' });
+        const errors = validateCreateOrder(req.body);
+        if (errors.length) {
+            return res.status(400).json({ error: errors.join(', ') });
         }
 
         let amountRupees;
