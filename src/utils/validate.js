@@ -1,19 +1,27 @@
 // ── Simple input validators ───────────────────────────────────────────────────
 
+const VALID_COACHING_TYPES = ['online', 'video', 'personal'];
+const VALID_PLAN_TYPES = ['individual', 'couple', 'basic_individual', 'basic_couple'];
+const VALID_DURATIONS = ['1', '3', '6', '12'];
+
+// NOTE: /api/create-order no longer accepts `amount` from the client — the
+// server resolves the real price itself via resolvePrice() to prevent price
+// tampering. Validate the plan-selection fields instead.
 export function validateCreateOrder(body) {
     const errors = [];
-    const { amount, currency } = body;
+    const { coachingType, planType, durationMonths } = body;
 
-    if (amount === undefined || amount === null) {
-        errors.push('amount is required');
-    } else if (isNaN(Number(amount))) {
-        errors.push('amount must be a number (in paise)');
-    } else if (Math.round(Number(amount)) < 100) {
-        errors.push('amount must be at least 100 paise (₹1)');
+    if (!coachingType || !VALID_COACHING_TYPES.includes(coachingType)) {
+        errors.push(`coachingType must be one of: ${VALID_COACHING_TYPES.join(', ')}`);
     }
 
-    if (currency && !/^[A-Z]{3}$/.test(currency)) {
-        errors.push('currency must be a 3-letter ISO code (e.g. INR)');
+    if (!planType || !VALID_PLAN_TYPES.includes(planType)) {
+        errors.push(`planType must be one of: ${VALID_PLAN_TYPES.join(', ')}`);
+    }
+
+    const isBasic = planType === 'basic_individual' || planType === 'basic_couple';
+    if (!isBasic && durationMonths && !VALID_DURATIONS.includes(String(durationMonths))) {
+        errors.push(`durationMonths must be one of: ${VALID_DURATIONS.join(', ')}`);
     }
 
     return errors;
@@ -23,9 +31,9 @@ export function validateVerifyPayment(body) {
     const errors = [];
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body;
 
-    if (!razorpay_order_id)  errors.push('razorpay_order_id is required');
+    if (!razorpay_order_id) errors.push('razorpay_order_id is required');
     if (!razorpay_payment_id) errors.push('razorpay_payment_id is required');
-    if (!razorpay_signature)  errors.push('razorpay_signature is required');
+    if (!razorpay_signature) errors.push('razorpay_signature is required');
 
     return errors;
 }
