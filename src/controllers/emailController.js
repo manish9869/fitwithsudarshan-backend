@@ -113,6 +113,7 @@ export async function sendEnrollmentEmails(req, res, next) {
 }
 
 async function _sendEnrollmentEmailsBackground(enrollment) {
+  logger.info(`[email:enrollment] START — enrollmentId=${enrollment.enrollmentId} to=${enrollment.customerEmail}`);
   const transporter = getTransporter();
   const coachEmail = config.email.coachEmail || config.email.gmailUser;
 
@@ -120,6 +121,7 @@ async function _sendEnrollmentEmailsBackground(enrollment) {
   // Now it doesn't block the HTTP response.
   let invoiceAttachment = [];
   try {
+    logger.info(`[email:enrollment] generating invoice PDF...`);
     const invoiceBuffer = generateInvoiceBuffer(enrollment);
 
     // generateInvoiceBuffer is async — we intentionally kick it off without
