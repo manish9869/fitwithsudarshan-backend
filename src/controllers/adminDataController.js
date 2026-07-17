@@ -282,6 +282,67 @@ export async function exportAssessments(req, res) {
     }
 }
 
+export async function getFunnelAudit(req, res) {
+    try {
+        const supabase = getSupabaseAdmin();
+        const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+        const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+        const { data: opened, error: e1 } = await supabase
+            .from('transaction_logs')
+            .select('razorpay_order_id')
+            .in('step', ['create_order', 'client:checkout_opened'])
+            .gte('created_at', since);
+
+        const { data: captured, error: e2 } = await supabase
+            .from('transaction_logs')
+            .select('razorpay_order_id')
+            .eq('step', 'confirm_payment:db_update')
+            .eq('status', 'success')
+            .gte('created_at', since);
+
+        const { data: paidRows, error: e3 } = await supabase
+            .from('enrollments')
+            .select('id, enrollment_id, customer_name, customer_email, amount_paid, razorpay_order_id, created_at')
+            .eq('payment_status', 'paid')
+            .gte('created_at', since);
+
+        if (e1 || e2 || e3) throw (e1 || e2 || e3);
+
+        const capturedOrderIds = new Set((captured || []).map((c) => c.razorpay_order_id).filter(Boolean));
+        const paidByOrderId = new Map((paidRows || []).map((p) => [p.razorpay_order_id, p]));
+
+        const loggedButNotPaid = [...capturedOrderIds].filter((id) => !paidByOrderId.has(id));
+
+        const paidButNotLogged = (paidRows || [])
+            .filter((p) => p.razorpay_order_id && !capturedOrderIds.has(p.razorpay_order_id))
+            .map((p) => ({
+                enrollmentId: p.enrollment_id,
+                customerName: p.customer_name,
+                customerEmail: p.customer_email,
+                amountPaid: p.amount_paid,
+                razorpayOrderId: p.razorpay_order_id,
+                createdAt: p.created_at,
+            }));
+
+        return res.json({
+            rangeDays: days,
+            totals: {
+                checkoutOpened: (opened || []).length,
+                capturedAndLogged: capturedOrderIds.size,
+                paidInDb: paidByOrderId.size,
+            },
+            issues: {
+                loggedButNotPaid,
+                paidButNotLogged,
+            },
+        });
+    } catch (err) {
+        logger.error(`[admin] getFunnelAudit failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to build funnel audit.' });
+    }
+}
+
 // ── PATCH /api/admin/assessments/:id/status ─────────────────────────────────
 const VALID_ASSESSMENT_STATUSES = ['new', 'reviewed', 'plan_sent', 'completed', 'archived'];
 export async function updateAssessmentStatus(req, res) {
