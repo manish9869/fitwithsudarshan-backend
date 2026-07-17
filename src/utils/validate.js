@@ -9,20 +9,20 @@ const VALID_DURATIONS = ['1', '3', '6', '12'];
 // tampering. Validate the plan-selection fields instead.
 export function validateCreateOrder(body) {
     const errors = [];
-    const { coachingType, planType, durationMonths } = body;
+    const { coachingType, planType, durationMonths, customerName, customerEmail } = body;
 
     if (!coachingType || !VALID_COACHING_TYPES.includes(coachingType)) {
         errors.push(`coachingType must be one of: ${VALID_COACHING_TYPES.join(', ')}`);
     }
-
     if (!planType || !VALID_PLAN_TYPES.includes(planType)) {
         errors.push(`planType must be one of: ${VALID_PLAN_TYPES.join(', ')}`);
     }
-
     const isBasic = planType === 'basic_individual' || planType === 'basic_couple';
     if (!isBasic && durationMonths && !VALID_DURATIONS.includes(String(durationMonths))) {
         errors.push(`durationMonths must be one of: ${VALID_DURATIONS.join(', ')}`);
     }
+    if (!customerName || !customerName.trim()) errors.push('customerName is required');
+    if (!customerEmail || !customerEmail.includes('@')) errors.push('A valid customerEmail is required');
 
     return errors;
 }
