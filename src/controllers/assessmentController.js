@@ -28,7 +28,7 @@ import { renderTemplate } from '../services/emailTemplates.js';
 import { config } from '../config/env.js';
 import logger from '../config/logger.js';
 import nodemailer from 'nodemailer';
-
+import { waitUntil } from '@vercel/functions';
 // ── Multer setup ──────────────────────────────────────────────────────────────
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -186,9 +186,9 @@ export async function submitAssessmentHandler(req, res, next) {
         );
 
         // Fire-and-forget — don't block the HTTP response on email delivery
-        sendAssessmentEmails(row).catch((err) =>
+        waitUntil(sendAssessmentEmails(row).catch((err) =>
             logger.error(`[assessment] Email dispatch error: ${err.message}`)
-        );
+        ));
 
         return res.status(201).json({ success: true, assessmentId: row.id });
     } catch (err) {
