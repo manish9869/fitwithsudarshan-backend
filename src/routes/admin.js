@@ -18,7 +18,7 @@ import {
     updateAssessmentStatus,
     updateAssessmentReviewed,
     upsertNote,
-    getDashboard,
+    getDashboard, getFunnelAudit,
 } from '../controllers/adminDataController.js';
 import { exportAssessments } from '../controllers/adminDataController.js';
 
@@ -61,6 +61,7 @@ router.get('/dashboard', getDashboard);
 router.get('/enrollments', listEnrollments);
 router.get('/enrollments/export', exportEnrollments);
 router.get('/enrollments/:id', getEnrollment);
+router.get('/funnel-audit', getFunnelAudit);
 router.patch('/enrollments/:id/status', updateEnrollmentStatus);
 
 router.get('/assessments', listAssessments);
