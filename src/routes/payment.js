@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import express from 'express';
-import { createOrder, verifyPayment, healthCheck, downloadInvoice, createEnrollment } from '../controllers/paymentController.js';
+import { createOrder, confirmPayment, healthCheck, downloadInvoice } from '../controllers/paymentController.js';
 import { sendEmail, sendEnrollmentEmails } from '../controllers/emailController.js';
 import { paymentLimiter } from '../middleware/security.js';
 import { assessmentUpload, submitAssessmentHandler } from '../controllers/assessmentController.js';
@@ -16,8 +16,7 @@ router.post('/webhooks/razorpay', express.raw({ type: 'application/json' }), han
 
 router.get('/health', healthCheck);
 router.post('/create-order', paymentLimiter, createOrder);
-router.post('/verify-payment', paymentLimiter, verifyPayment);
-router.post('/create-enrollment', paymentLimiter, createEnrollment);
+router.post('/confirm-payment', paymentLimiter, confirmPayment);
 
 // ── Email routes ──────────────────────────────────────────────────────────────
 router.post('/send-email', sendEmail);

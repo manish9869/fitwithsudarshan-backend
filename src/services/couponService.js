@@ -65,11 +65,23 @@ export async function validateCouponCode({ code, coachingType, planType, duratio
     };
 }
 
+// Atomic increment via Postgres RPC — avoids the read-then-write race where
+// two near-simultaneous redemptions could both read the same used_count and
+// under-count usage. Falls back to the old read-then-write path only if the
+// RPC function hasn't been created yet in Supabase (see SQL migration).
 export async function incrementCouponUsage(code) {
     const supabase = getSupabaseAdmin();
     const coupon = await findCouponByCode(code);
     if (!coupon) return;
-    await supabase.from('coupons').update({ used_count: (coupon.used_count || 0) + 1 }).eq('id', coupon.id);
+
+    const { error: rpcError } = await supabase.rpc('increment_coupon_usage', { coupon_id: coupon.id });
+
+    if (rpcError) {
+        // RPC missing/misconfigured — fall back so usage tracking never
+        // just silently stops working, but log it loudly so it gets fixed.
+        console.error(`[couponService] increment_coupon_usage RPC failed (${rpcError.message}) — falling back to non-atomic update.`);
+        await supabase.from('coupons').update({ used_count: (coupon.used_count || 0) + 1 }).eq('id', coupon.id);
+    }
 }
 
 // ── Admin CRUD ──────────────────────────────────────────────────────────────
