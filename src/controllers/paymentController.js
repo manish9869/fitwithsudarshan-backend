@@ -1,4 +1,4 @@
-import { createRazorpayOrder, verifyPaymentSignature, fetchRazorpayOrder, fetchRazorpayPayment } from '../utils/razorpay.js';
+import { createRazorpayOrder, verifyPaymentSignature, fetchRazorpayPayment } from '../utils/razorpay.js';
 import { validateVerifyPayment, validateCreateOrder } from '../utils/validate.js';
 import { resolvePrice } from '../data/serverPricing.js';
 import { validateCouponCode, incrementCouponUsage } from '../services/couponService.js';
@@ -11,10 +11,11 @@ import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { logTxnStep } from '../services/txnLogService.js';
 import { generateEnrollmentId } from '../utils/enrollmentId.js';
 import { waitUntil } from '@vercel/functions';
+
 // ── POST /api/create-order ────────────────────────────────────────────────
-// CHANGED: client no longer sends `amount`. It sends plan selection; the
-// server resolves the real price and validates any coupon. This is the fix
-// for price tampering — the client cannot influence the charged amount.
+// Client no longer sends `amount` — the server resolves the real price and
+// validates any coupon. This is what stops price tampering: the client
+// cannot influence the charged amount.
 export async function createOrder(req, res, next) {
     const {
         coachingType, planType, durationMonths, couponCode, receipt = `rcpt_${Date.now()}`,
@@ -24,11 +25,11 @@ export async function createOrder(req, res, next) {
     } = req.body;
 
     try {
-        await logTxnStep({ step: 'create_order', status: 'started', metadata: { coachingType, planType, durationMonths } });
+        logTxnStep({ step: 'create_order', status: 'started', metadata: { coachingType, planType, durationMonths } });
 
         const errors = validateCreateOrder(req.body);
         if (errors.length) {
-            await logTxnStep({ step: 'create_order:validate', status: 'failed', message: errors.join(', ') });
+            logTxnStep({ step: 'create_order:validate', status: 'failed', message: errors.join(', ') });
             return res.status(400).json({ error: errors.join(', ') });
         }
 
@@ -103,12 +104,12 @@ export async function createOrder(req, res, next) {
         const { error: insertErr } = await supabase.from('enrollments').insert([pendingRow]);
         if (insertErr) {
             logger.error(`[create-order] ❌ pending row insert failed: ${insertErr.message}`);
-            await logTxnStep({ orderId: order.id, step: 'create_order:pending_insert', status: 'failed', message: insertErr.message });
+            logTxnStep({ orderId: order.id, step: 'create_order:pending_insert', status: 'failed', message: insertErr.message });
             // Don't let the customer pay if we can't even track it
             return res.status(500).json({ error: 'Could not initialize enrollment. Please try again.' });
         }
 
-        await logTxnStep({ orderId: order.id, enrollmentId, step: 'create_order', status: 'success' });
+        logTxnStep({ orderId: order.id, enrollmentId, step: 'create_order', status: 'success' });
 
         return res.status(201).json({
             order_id: order.id,
@@ -119,76 +120,35 @@ export async function createOrder(req, res, next) {
         });
     } catch (err) {
         logger.error(`[create-order] FAILED — ${err.message}`);
-        await logTxnStep({ step: 'create_order', status: 'failed', message: err.message });
+        logTxnStep({ step: 'create_order', status: 'failed', message: err.message });
         next(err);
     }
 }
 
-
-// ── POST /api/verify-payment ──────────────────────────────────────────────
-export async function verifyPayment(req, res, next) {
-    try {
-        const errors = validateVerifyPayment(req.body);
-        if (errors.length) {
-            await logTxnStep({ step: 'verify_payment:validate', status: 'failed', message: errors.join(', ') });
-            return res.status(400).json({ error: errors.join(', ') });
-        }
-
-        const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-
-        await logTxnStep({
-            orderId: razorpay_order_id,
-            paymentId: razorpay_payment_id,
-            step: 'verify_payment',
-            status: 'started',
-        });
-
-        const isValid = verifyPaymentSignature({
-            orderId: razorpay_order_id, paymentId: razorpay_payment_id, signature: razorpay_signature,
-        });
-
-        if (!isValid) {
-            logger.warn(`[verify-payment] SIGNATURE MISMATCH — order=${razorpay_order_id}`);
-            await logTxnStep({
-                orderId: razorpay_order_id,
-                paymentId: razorpay_payment_id,
-                step: 'verify_payment',
-                status: 'failed',
-                message: 'signature mismatch',
-            });
-            return res.status(400).json({ success: false, error: 'Signature mismatch — payment not verified.' });
-        }
-
-        await logTxnStep({
-            orderId: razorpay_order_id,
-            paymentId: razorpay_payment_id,
-            step: 'verify_payment',
-            status: 'success',
-        });
-
-        return res.json({ success: true, payment_id: razorpay_payment_id });
-    } catch (err) {
-        await logTxnStep({ step: 'verify_payment', status: 'failed', message: err.message });
-        next(err);
-    }
-}
-
-// ── POST /api/create-enrollment ─────────────────────────────────────────
-export async function createEnrollment(req, res, next) {
+// ── POST /api/confirm-payment ──────────────────────────────────────────────
+// One call: verify signature → confirm capture with Razorpay → flip the
+// pending row to paid → respond → send emails in the background.
+// Replaces the old separate /verify-payment + /create-enrollment sequence.
+export async function confirmPayment(req, res, next) {
     const { razorpay_order_id: oid, razorpay_payment_id: pid, razorpay_signature } = req.body || {};
 
     try {
-        if (!oid || !pid || !razorpay_signature) {
-            return res.status(400).json({ error: 'Missing payment verification fields.' });
+        const errors = validateVerifyPayment(req.body);
+        if (errors.length) {
+            logTxnStep({ step: 'confirm_payment:validate', status: 'failed', message: errors.join(', ') });
+            return res.status(400).json({ error: errors.join(', ') });
         }
+
+        logTxnStep({ orderId: oid, paymentId: pid, step: 'confirm_payment', status: 'started' });
 
         const isValid = verifyPaymentSignature({ orderId: oid, paymentId: pid, signature: razorpay_signature });
         if (!isValid) {
-            await logTxnStep({ orderId: oid, paymentId: pid, step: 'create_enrollment:signature', status: 'failed' });
-            return res.status(400).json({ error: 'Payment signature invalid.' });
+            logger.warn(`[confirm-payment] SIGNATURE MISMATCH — order=${oid}`);
+            logTxnStep({ orderId: oid, paymentId: pid, step: 'confirm_payment:signature', status: 'failed', message: 'signature mismatch' });
+            return res.status(400).json({ success: false, error: 'Signature mismatch — payment not verified.' });
         }
 
-        const [order, payment] = await Promise.all([fetchRazorpayOrder(oid), fetchRazorpayPayment(pid)]);
+        const payment = await fetchRazorpayPayment(pid);
 
         if (payment.status !== 'captured') {
             return res.status(400).json({ error: 'Payment has not been captured.' });
@@ -216,8 +176,8 @@ export async function createEnrollment(req, res, next) {
             .maybeSingle();
 
         if (error) {
-            logger.error(`[create-enrollment] update failed: ${error.message}`);
-            await logTxnStep({ orderId: oid, paymentId: pid, step: 'create_enrollment:db_update', status: 'failed', message: error.message });
+            logger.error(`[confirm-payment] update failed: ${error.message}`);
+            logTxnStep({ orderId: oid, paymentId: pid, step: 'confirm_payment:db_update', status: 'failed', message: error.message });
             return res.status(500).json({ error: 'Failed to finalize enrollment. Please contact support with your payment ID.' });
         }
 
@@ -227,39 +187,51 @@ export async function createEnrollment(req, res, next) {
             if (existing?.payment_status === 'paid') {
                 return res.json({ success: true, enrollment: existing, alreadyProcessed: true });
             }
-            logger.error(`[create-enrollment] 🚨 no pending row found for order=${oid}`);
-            await logTxnStep({ orderId: oid, paymentId: pid, step: 'create_enrollment:db_update', status: 'failed', message: 'pending row not found' });
+            logger.error(`[confirm-payment] 🚨 no pending row found for order=${oid}`);
+            logTxnStep({ orderId: oid, paymentId: pid, step: 'confirm_payment:db_update', status: 'failed', message: 'pending row not found' });
             return res.status(404).json({ error: 'Enrollment record not found. Please contact support with your payment ID.' });
         }
 
-        logger.info(`[create-enrollment] ✅ CONFIRMED — ${data.enrollment_id}`);
-        await logTxnStep({ orderId: oid, paymentId: pid, enrollmentId: data.enrollment_id, step: 'create_enrollment:db_update', status: 'success' });
+        logger.info(`[confirm-payment] ✅ CONFIRMED — ${data.enrollment_id}`);
+        logTxnStep({ orderId: oid, paymentId: pid, enrollmentId: data.enrollment_id, step: 'confirm_payment:db_update', status: 'success' });
+
+        // Coupon usage is tracked here, right after the DB write succeeds —
+        // deliberately NOT inside sendEnrollmentConfirmation(), so a missing
+        // email config (or an email failure) can never silently skip
+        // recording that a coupon was used on a real, paid enrollment.
+        if (data.coupon_code) {
+            incrementCouponUsage(data.coupon_code).catch((e) => {
+                logger.error(`[confirm-payment] ⚠️ coupon usage increment failed for ${data.coupon_code}: ${e.message}`);
+                logTxnStep({ orderId: oid, paymentId: pid, enrollmentId: data.enrollment_id, step: 'confirm_payment:coupon_increment', status: 'failed', message: e.message });
+            });
+        }
 
         // Respond immediately — email/PDF happen after
         res.status(201).json({ success: true, enrollment: data });
 
         waitUntil(sendEnrollmentConfirmation(data).catch((e) => {
-            logger.error(`[create-enrollment] email dispatch failed: ${e.message}`);
-            return logTxnStep({ orderId: oid, paymentId: pid, enrollmentId: data.enrollment_id, step: 'create_enrollment:emails', status: 'failed', message: e.message });
+            logger.error(`[confirm-payment] email dispatch failed: ${e.message}`);
+            return logTxnStep({ orderId: oid, paymentId: pid, enrollmentId: data.enrollment_id, step: 'confirm_payment:emails', status: 'failed', message: e.message });
         }));
     } catch (err) {
-        logger.error(`[create-enrollment] FAILED — ${err.message}`);
+        logger.error(`[confirm-payment] FAILED — ${err.message}`);
         if (!res.headersSent) next(err);
     }
 }
+
 export async function sendEnrollmentConfirmation(row) {
 
     if (!config.email.gmailUser || !config.email.gmailAppPassword) {
-        logger.warn(`[create-enrollment] Skipped confirmation emails for ${row.enrollment_id} — GMAIL_USER / GMAIL_APP_PASSWORD not set.`);
-        await logTxnStep({
+        logger.warn(`[confirm-payment] Skipped confirmation emails for ${row.enrollment_id} — GMAIL_USER / GMAIL_APP_PASSWORD not set.`);
+        logTxnStep({
             orderId: row.razorpay_order_id, paymentId: row.razorpay_payment_id, enrollmentId: row.enrollment_id,
-            step: 'create_enrollment:emails', status: 'warning',
+            step: 'confirm_payment:emails', status: 'warning',
             message: 'skipped — GMAIL_USER / GMAIL_APP_PASSWORD not set',
         });
         return;
     }
 
-    logger.info(`[create-enrollment] Dispatching confirmation emails for ${row.enrollment_id} → coach + ${row.customer_email || 'no customer email'}`);
+    logger.info(`[confirm-payment] Dispatching confirmation emails for ${row.enrollment_id} → coach + ${row.customer_email || 'no customer email'}`);
 
     const transporter = getTransporter();
     const coachEmail = config.email.coachEmail || config.email.gmailUser;
@@ -293,17 +265,17 @@ export async function sendEnrollmentConfirmation(row) {
             contentType: 'application/pdf',
         }];
     } catch (e) {
-        logger.warn(`[create-enrollment] invoice generation failed for ${row.enrollment_id}: ${e.message}`);
-        await logTxnStep({
+        logger.warn(`[confirm-payment] invoice generation failed for ${row.enrollment_id}: ${e.message}`);
+        logTxnStep({
             orderId: row.razorpay_order_id, paymentId: row.razorpay_payment_id, enrollmentId: row.enrollment_id,
-            step: 'create_enrollment:invoice_pdf', status: 'failed', message: e.message,
+            step: 'confirm_payment:invoice_pdf', status: 'failed', message: e.message,
         });
     }
 
     const coachMail = renderTemplate('enrollment_coach', templateData);
     const customerMail = renderTemplate('enrollment_customer', templateData);
 
-    const [coachResult, customerResult, couponResult] = await Promise.allSettled([
+    const [coachResult, customerResult] = await Promise.allSettled([
         transporter.sendMail({
             from: `"RECODE™ by FitWithSudarshan" <${config.email.gmailUser}>`,
             to: coachEmail, subject: coachMail.subject, html: coachMail.html,
@@ -316,47 +288,38 @@ export async function sendEnrollmentConfirmation(row) {
                 attachments: invoiceAttachment,
             })
             : Promise.resolve('skipped — no customer email on file'),
-        row.coupon_code ? incrementCouponUsage(row.coupon_code) : Promise.resolve(),
     ]);
 
     if (coachResult.status === 'fulfilled') {
-        logger.info(`[create-enrollment] ✅ Coach email sent → ${coachEmail} (${row.enrollment_id})`);
-        await logTxnStep({
+        logger.info(`[confirm-payment] ✅ Coach email sent → ${coachEmail} (${row.enrollment_id})`);
+        logTxnStep({
             orderId: row.razorpay_order_id, paymentId: row.razorpay_payment_id, enrollmentId: row.enrollment_id,
-            step: 'create_enrollment:email_coach', status: 'success',
+            step: 'confirm_payment:email_coach', status: 'success',
         });
     } else {
-        logger.error(`[create-enrollment] ❌ Coach email FAILED for ${row.enrollment_id}: ${coachResult.reason?.message}`);
-        await logTxnStep({
+        logger.error(`[confirm-payment] ❌ Coach email FAILED for ${row.enrollment_id}: ${coachResult.reason?.message}`);
+        logTxnStep({
             orderId: row.razorpay_order_id, paymentId: row.razorpay_payment_id, enrollmentId: row.enrollment_id,
-            step: 'create_enrollment:email_coach', status: 'failed', message: coachResult.reason?.message,
+            step: 'confirm_payment:email_coach', status: 'failed', message: coachResult.reason?.message,
         });
     }
 
     if (row.customer_email) {
         if (customerResult.status === 'fulfilled') {
-            logger.info(`[create-enrollment] ✅ Customer email sent → ${row.customer_email} (${row.enrollment_id})`);
-            await logTxnStep({
+            logger.info(`[confirm-payment] ✅ Customer email sent → ${row.customer_email} (${row.enrollment_id})`);
+            logTxnStep({
                 orderId: row.razorpay_order_id, paymentId: row.razorpay_payment_id, enrollmentId: row.enrollment_id,
-                step: 'create_enrollment:email_customer', status: 'success',
+                step: 'confirm_payment:email_customer', status: 'success',
             });
         } else {
-            logger.error(`[create-enrollment] ❌ Customer email FAILED for ${row.enrollment_id}: ${customerResult.reason?.message}`);
-            await logTxnStep({
+            logger.error(`[confirm-payment] ❌ Customer email FAILED for ${row.enrollment_id}: ${customerResult.reason?.message}`);
+            logTxnStep({
                 orderId: row.razorpay_order_id, paymentId: row.razorpay_payment_id, enrollmentId: row.enrollment_id,
-                step: 'create_enrollment:email_customer', status: 'failed', message: customerResult.reason?.message,
+                step: 'confirm_payment:email_customer', status: 'failed', message: customerResult.reason?.message,
             });
         }
     } else {
-        logger.info(`[create-enrollment] ℹ️ No customer email on file — skipped for ${row.enrollment_id}`);
-    }
-
-    if (row.coupon_code && couponResult.status === 'rejected') {
-        logger.error(`[create-enrollment] ⚠️ Coupon usage increment failed for ${row.coupon_code}: ${couponResult.reason?.message}`);
-        await logTxnStep({
-            orderId: row.razorpay_order_id, paymentId: row.razorpay_payment_id, enrollmentId: row.enrollment_id,
-            step: 'create_enrollment:coupon_increment', status: 'failed', message: couponResult.reason?.message,
-        });
+        logger.info(`[confirm-payment] ℹ️ No customer email on file — skipped for ${row.enrollment_id}`);
     }
 }
 
