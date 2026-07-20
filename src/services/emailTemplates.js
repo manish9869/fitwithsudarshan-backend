@@ -1,10 +1,5 @@
 /**
  * src/services/emailTemplates.js
- *
- * Performance improvements vs original:
- *   - Templates are read from disk ONCE and cached in memory.
- *     Previously readFileSync was called on every renderTemplate() invocation.
- *   - inject() is unchanged functionally.
  */
 
 import fs from 'fs';
@@ -14,7 +9,6 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.resolve(__dirname, '../templates');
 
-// ── Template cache — populated lazily, lives for the lifetime of the process ─
 const _templateCache = new Map();
 
 function readTemplate(name) {
@@ -29,18 +23,20 @@ function readTemplate(name) {
     return content;
 }
 
-// Pre-warm the cache at module load time so the first request isn't slower.
-// Any template that fails to load (e.g. file genuinely missing) is logged but
-// does not crash the server on boot.
 const KNOWN_TEMPLATES = [
     'enrollment_coach', 'enrollment_customer', 'welcome',
     'payment_failed', 'payment_reminder',
     'contact_inquiry_coach', 'contact_inquiry_customer',
-    'assessment_coach', 'assessment_customer', 'balance_due_reminder'
+    'assessment_coach', 'assessment_customer', 'balance_due_reminder',
+    'resource_vault',
 ];
 for (const name of KNOWN_TEMPLATES) {
     try { readTemplate(name); } catch { /* not fatal at boot */ }
 }
+
+// Default Comeback Blueprint Drive link — pass `driveLink` per-send to override.
+const DEFAULT_RESOURCE_VAULT_LINK =
+    'https://drive.google.com/drive/folders/1RqwkO6Z5HADSoD86rkVFRiaDgB0Ro1RO?usp=drive_link';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -69,7 +65,6 @@ function fmtDate(iso) {
 }
 
 function inject(html, data) {
-    // 1. Handle {{#if key}}...{{else}}...{{/if}} blocks
     html = html.replace(/\{\{#if (\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_, key, block) => {
         const elseSplit = block.match(/^([\s\S]*?)\{\{else\}\}([\s\S]*)$/);
         if (elseSplit) {
@@ -79,7 +74,6 @@ function inject(html, data) {
         return data[key] ? block : '';
     });
 
-    // 2. Replace all {{key}} tokens
     html = html.replace(/\{\{(\w+)\}\}/g, (_, key) => {
         const val = data[key];
         if (val === undefined || val === null) return '—';
@@ -258,14 +252,34 @@ const templateBuilders = {
 
     balance_due_reminder(d) {
         const firstName = (d.customerName || 'there').split(' ')[0];
+        const totalAmt = Number(d.totalAmount || 0);
+        const paidAmt = Number(d.amountPaid || 0);
+        const paidPercent = totalAmt > 0
+            ? Math.min(100, Math.max(0, Math.round((paidAmt / totalAmt) * 100)))
+            : 0;
+
         const subject = `💳 Balance due — ${fmt(d.balanceDue)} remaining on your RECODE™ plan`;
         const html = inject(readTemplate('balance_due_reminder'), {
             firstName,
             programName: d.programName || '—',
+            durationLabel: d.durationMonths ? `${d.durationMonths} Month${Number(d.durationMonths) > 1 ? 's' : ''}` : '—',
             totalAmountFormatted: fmt(d.totalAmount),
             amountPaidFormatted: fmt(d.amountPaid),
             balanceDueFormatted: fmt(d.balanceDue),
+            paidPercent: String(paidPercent),
             enrollmentId: d.enrollmentId || '—',
+        });
+        return { subject, html };
+    },
+
+    // ── Comeback Blueprint / resource vault delivery email ──
+    resource_vault(d) {
+        const firstName = (d.customerName || d.firstName || 'there').toString().split(' ')[0];
+        const subject = `📚 Your RECODE™ Comeback Blueprint is ready, ${firstName}!`;
+        const html = inject(readTemplate('resource_vault'), {
+            firstName,
+            driveLink: d.driveLink || DEFAULT_RESOURCE_VAULT_LINK,
+            hasAttachment: !!d.hasAttachment,
         });
         return { subject, html };
     },

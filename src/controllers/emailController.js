@@ -1,24 +1,9 @@
-/**
- * src/controllers/emailController.js
- *
- * Performance improvements vs original:
- *
- *  1. sendEnrollmentEmails() now responds to the frontend IMMEDIATELY after
- *     basic validation. PDF generation + email sending happen in the background.
- *     Previously the entire flow (Puppeteer launch → PDF → SMTP) had to complete
- *     before the HTTP response was sent, adding 5–15s to every enrollment.
- *
- *  2. Coach and customer emails are sent simultaneously (Promise.allSettled),
- *     same as before, but now without blocking the client response.
- *
- *  3. Transporter is created once and reused (unchanged from original).
- */
-
 import nodemailer from 'nodemailer';
 import { renderTemplate, TEMPLATE_NAMES } from '../services/emailTemplates.js';
 import { config } from '../config/env.js';
 import logger from '../config/logger.js';
 import { generateInvoiceBuffer } from '../services/invoiceService.js';
+import { fetchPdfAttachment } from '../services/pdfAttachmentService.js';
 
 // ── Reusable transporter ──────────────────────────────────────────────────────
 export let _transporter = null;
@@ -57,7 +42,22 @@ export async function sendEmail(req, res, next) {
       return res.json({ success: true, skipped: true });
     }
 
-    const { subject, html } = renderTemplate(template, data);
+    // ── Resource vault PDF attachment ─────────────────────────────────────
+    // pdfUrl can be passed explicitly per-send (data.pdfUrl), or falls back
+    // to RESOURCE_VAULT_PDF_URL in env — set that once you have the file
+    // hosted somewhere with a direct-download link, no code change needed.
+    let attachments = [];
+    let hasAttachment = false;
+    if (template === 'resource_vault') {
+      const pdfUrl = data.pdfUrl || process.env.RESOURCE_VAULT_PDF_URL || '';
+      const attachment = await fetchPdfAttachment(pdfUrl, 'RECODE-Comeback-Blueprint.pdf');
+      if (attachment) {
+        attachments = [attachment];
+        hasAttachment = true;
+      }
+    }
+
+    const { subject, html } = renderTemplate(template, { ...data, hasAttachment });
 
     await getTransporter().sendMail({
       from: `"RECODE™ by FitWithSudarshan" <${config.email.gmailUser}>`,
@@ -65,10 +65,11 @@ export async function sendEmail(req, res, next) {
       replyTo: config.email.coachEmail || config.email.gmailUser,
       subject,
       html,
+      attachments,
     });
 
-    logger.info(`[email] ✅ Sent template="${template}" → ${to}`);
-    return res.json({ success: true });
+    logger.info(`[email] ✅ Sent template="${template}" → ${to}${hasAttachment ? ' (with PDF attachment)' : ''}`);
+    return res.json({ success: true, attached: hasAttachment });
 
   } catch (err) {
     logger.error(`[email] ❌ Failed: ${err.message}`);
@@ -77,11 +78,6 @@ export async function sendEmail(req, res, next) {
 }
 
 // ── POST /api/send-enrollment-emails ─────────────────────────────────────────
-//
-// KEY CHANGE: Respond 202 Accepted immediately after validation.
-// PDF generation + SMTP happen in the background so the frontend isn't
-// blocked waiting for Puppeteer (the #1 source of slow responses).
-//
 export async function sendEnrollmentEmails(req, res, next) {
   try {
     const enrollment = req.body;
@@ -95,18 +91,13 @@ export async function sendEnrollmentEmails(req, res, next) {
       return res.json({ success: true, skipped: true });
     }
 
-    // ── Respond to the client right away ─────────────────────────────────
-    // The frontend can show "Emails on their way!" without waiting for
-    // Puppeteer to launch, render, and SMTP to flush.
     res.status(202).json({ success: true, queued: true });
 
-    // ── Everything below runs AFTER the response is sent ─────────────────
     _sendEnrollmentEmailsBackground(enrollment).catch((err) =>
       logger.error(`[email] Background enrollment email error: ${err.message}`)
     );
 
   } catch (err) {
-    // If something throws before res.json() we still need next(err)
     if (!res.headersSent) next(err);
     else logger.error(`[email] sendEnrollmentEmails outer error: ${err.message}`);
   }
@@ -117,16 +108,10 @@ async function _sendEnrollmentEmailsBackground(enrollment) {
   const transporter = getTransporter();
   const coachEmail = config.email.coachEmail || config.email.gmailUser;
 
-  // Generate PDF — this is the slow part (~3–12s depending on cold start).
-  // Now it doesn't block the HTTP response.
   let invoiceAttachment = [];
   try {
     logger.info(`[email:enrollment] generating invoice PDF...`);
     const invoiceBuffer = generateInvoiceBuffer(enrollment);
-
-    // generateInvoiceBuffer is async — we intentionally kick it off without
-    // awaiting before res.json(), but we DO await it here so the attachment
-    // is ready before sendMail() fires.
     const buffer = await invoiceBuffer;
     invoiceAttachment = [{
       filename: `RECODE-Invoice-${enrollment.enrollmentId}.pdf`,
@@ -139,7 +124,6 @@ async function _sendEnrollmentEmailsBackground(enrollment) {
   }
 
   const [coachResult, customerResult] = await Promise.allSettled([
-    // Coach email — no invoice needed
     (async () => {
       const { subject, html } = renderTemplate('enrollment_coach', enrollment);
       return transporter.sendMail({
@@ -149,7 +133,6 @@ async function _sendEnrollmentEmailsBackground(enrollment) {
         html,
       });
     })(),
-    // Customer email — with invoice attached
     (async () => {
       const { subject, html } = renderTemplate('enrollment_customer', enrollment);
       return transporter.sendMail({
