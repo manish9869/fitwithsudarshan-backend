@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import express from 'express';
-import { createOrder, confirmPayment, healthCheck, downloadInvoice } from '../controllers/paymentController.js';
+import { createOrder, confirmPayment, healthCheck, downloadInvoice, downloadPaymentReceipt } from '../controllers/paymentController.js';
 import { sendEmail, sendEnrollmentEmails } from '../controllers/emailController.js';
 import { paymentLimiter } from '../middleware/security.js';
 import { assessmentUpload, submitAssessmentHandler } from '../controllers/assessmentController.js';
@@ -22,6 +22,7 @@ router.post('/confirm-payment', paymentLimiter, confirmPayment);
 router.post('/send-email', sendEmail);
 router.post('/send-enrollment-emails', sendEnrollmentEmails);
 router.post('/invoice', downloadInvoice);
+router.post('/payment-receipt', downloadPaymentReceipt);
 
 // ── Onboarding assessment ─────────────────────────────────────────────────────
 router.post('/submit-assessment', assessmentUpload, submitAssessmentHandler);

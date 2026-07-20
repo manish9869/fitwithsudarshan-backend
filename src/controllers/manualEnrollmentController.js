@@ -12,6 +12,7 @@ import { recordPayment, getPaymentsForEnrollment, listOutstandingBalances, recom
 import { config } from '../config/env.js';
 import logger from '../config/logger.js';
 import { fetchPdfAttachment, DEFAULT_RESOURCE_VAULT_PDF_URL } from '../services/pdfAttachmentService.js';
+import { generatePaymentReceiptBuffer } from '../services/paymentReceiptService.js';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function generateEnrollmentId() {
@@ -295,6 +296,91 @@ export async function sendBalanceReminder(req, res) {
     } catch (err) {
         logger.error(`[admin] sendBalanceReminder failed: ${err.message}`);
         return res.status(500).json({ error: 'Failed to send reminder.' });
+    }
+}
+
+
+// ── POST /api/admin/enrollments/:id/payments/:paymentId/send-receipt ─────────
+// Emails a PDF receipt for ONE specific payment/installment on this
+// enrollment. Works identically whether the enrollment came from the
+// website checkout or was entered manually — both live in the same
+// enrollments + enrollment_payments tables.
+export async function sendPaymentReceiptEmail(req, res) {
+    try {
+        const supabase = getSupabaseAdmin();
+
+        const { data: enrollment, error: eErr } = await supabase
+            .from('enrollments').select('*').eq('id', req.params.id).single();
+        if (eErr || !enrollment) return res.status(404).json({ error: 'Enrollment not found.' });
+        if (!enrollment.customer_email) {
+            return res.status(400).json({ error: 'This enrollment has no customer email on file.' });
+        }
+
+        const { data: payment, error: pErr } = await supabase
+            .from('enrollment_payments')
+            .select('*')
+            .eq('id', req.params.paymentId)
+            .eq('enrollment_id', req.params.id)
+            .single();
+        if (pErr || !payment) return res.status(404).json({ error: 'Payment not found.' });
+
+        // Sum every payment up to and including this one (ledger is
+        // chronological) so the receipt shows an accurate running balance
+        // even if this isn't the most recent payment.
+        const { data: allPayments, error: apErr } = await supabase
+            .from('enrollment_payments')
+            .select('id, amount, paid_at')
+            .eq('enrollment_id', req.params.id)
+            .order('paid_at', { ascending: true });
+        if (apErr) throw apErr;
+
+        const idx = (allPayments || []).findIndex((p) => p.id === payment.id);
+        const paidToDate = (allPayments || [])
+            .slice(0, idx === -1 ? allPayments.length : idx + 1)
+            .reduce((s, p) => s + Number(p.amount || 0), 0);
+
+        if (!config.email.gmailUser || !config.email.gmailAppPassword) {
+            return res.status(500).json({ error: 'Email is not configured on the server.' });
+        }
+
+        const buffer = await generatePaymentReceiptBuffer(enrollment, payment, paidToDate);
+        const transporter = getTransporter();
+        const coachEmail = config.email.coachEmail || config.email.gmailUser;
+
+        const totalAmount = Number(enrollment.total_amount ?? enrollment.amount_paid ?? 0);
+        const balanceDue = Math.max(0, totalAmount - paidToDate);
+
+        const { subject, html } = renderTemplate('payment_receipt_email', {
+            customerName: enrollment.customer_name,
+            programName: enrollment.program_name,
+            amountPaid: payment.amount,
+            paidToDate,
+            totalAmount,
+            balanceDue,
+            paymentDate: payment.paid_at,
+            method: payment.method,
+            reference: payment.reference,
+            enrollmentId: enrollment.enrollment_id,
+        });
+
+        await transporter.sendMail({
+            from: `"RECODE™ by FitWithSudarshan" <${config.email.gmailUser}>`,
+            to: enrollment.customer_email,
+            replyTo: coachEmail,
+            subject,
+            html,
+            attachments: [{
+                filename: `RECODE-Receipt-${enrollment.enrollment_id}.pdf`,
+                content: buffer,
+                contentType: 'application/pdf',
+            }],
+        });
+
+        logger.info(`[admin] ${req.admin.username} emailed payment receipt for ${enrollment.enrollment_id} (payment ${payment.id})`);
+        return res.json({ success: true });
+    } catch (err) {
+        logger.error(`[admin] sendPaymentReceiptEmail failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to send receipt email.' });
     }
 }
 
