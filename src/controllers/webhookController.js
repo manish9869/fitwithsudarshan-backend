@@ -3,13 +3,25 @@ import crypto from 'crypto';
 import { waitUntil } from '@vercel/functions';
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { logTxnStep } from '../services/txnLogService.js';
-import { sendEnrollmentConfirmation } from './paymentController.js'; // see export change below
+import { incrementCouponUsage } from '../services/couponService.js';
+import { sendEnrollmentConfirmation } from './paymentController.js';
 import logger from '../config/logger.js';
 
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
 
 export async function handleRazorpayWebhook(req, res) {
     try {
+        if (!WEBHOOK_SECRET) {
+            // Loud failure instead of throwing inside crypto.createHmac —
+            // without this secret set, the webhook can never verify a
+            // signature, meaning payment reconciliation silently depends
+            // 100% on the browser's confirm-payment call. If the customer's
+            // tab closes right after paying, that enrollment never gets
+            // marked paid. Set RAZORPAY_WEBHOOK_SECRET in your env.
+            logger.error('[webhook] RAZORPAY_WEBHOOK_SECRET is not set — webhook cannot verify signatures.');
+            return res.status(500).json({ error: 'Webhook not configured' });
+        }
+
         const signature = req.headers['x-razorpay-signature'];
         const expected = crypto.createHmac('sha256', WEBHOOK_SECRET).update(req.body).digest('hex');
 
@@ -55,20 +67,45 @@ export async function handleRazorpayWebhook(req, res) {
         }
 
         if (!data) {
-            // Already processed by the client-side path — fine, just ack
+            // Already processed by the client-side confirm-payment path — fine, just ack
             return res.status(200).json({ received: true, alreadyProcessed: true });
         }
 
         logger.info(`[webhook] ✅ CONFIRMED — ${data.enrollment_id}`);
         await logTxnStep({ orderId, paymentId, enrollmentId: data.enrollment_id, step: 'webhook:db_update', status: 'success' });
 
+        // ── Coupon usage — mirrors confirmPayment(). The webhook can be the
+        // path that actually wins the "pending → paid" race (browser tab
+        // closed right after paying, slow client network, etc). Without this
+        // the coupon's used_count silently under-counts, letting a
+        // max-uses-limited coupon get redeemed more times than intended.
+        if (data.coupon_code) {
+            incrementCouponUsage(data.coupon_code).catch((e) => {
+                logger.error(`[webhook] ⚠️ coupon usage increment failed for ${data.coupon_code}: ${e.message}`);
+                logTxnStep({ orderId, paymentId, enrollmentId: data.enrollment_id, step: 'webhook:coupon_increment', status: 'failed', message: e.message });
+            });
+        }
+
+        // ── Payment ledger — the single source of truth PaymentLedgerPanel
+        // reads from. A failed insert here used to be invisible (enrollment
+        // shows "paid" but the ledger shows zero payments) — now it's logged
+        // to transaction_logs so it surfaces in Funnel Audit / txn-timeline.
         supabase.from('enrollment_payments').insert([{
             enrollment_id: data.id,
             amount: data.amount_paid,
             method: 'razorpay',
             reference: data.razorpay_payment_id,
             paid_at: data.payment_date,
-        }]).then(() => { }).catch((e) => logger.warn(`[confirm-payment] ledger insert failed: ${e.message}`));
+        }]).then(({ error: ledgerErr }) => {
+            if (ledgerErr) {
+                logger.warn(`[webhook] ledger insert failed: ${ledgerErr.message}`);
+                logTxnStep({ orderId, paymentId, enrollmentId: data.enrollment_id, step: 'webhook:ledger_insert', status: 'failed', message: ledgerErr.message });
+            }
+        }).catch((e) => {
+            logger.warn(`[webhook] ledger insert threw: ${e.message}`);
+            logTxnStep({ orderId, paymentId, enrollmentId: data.enrollment_id, step: 'webhook:ledger_insert', status: 'failed', message: e.message });
+        });
+
         res.status(200).json({ received: true });
 
         waitUntil(sendEnrollmentConfirmation(data).catch((e) => {

@@ -216,7 +216,16 @@ export async function confirmPayment(req, res, next) {
             method: 'razorpay',
             reference: data.razorpay_payment_id,
             paid_at: data.payment_date,
-        }]).then(() => { }).catch((e) => logger.warn(`[confirm-payment] ledger insert failed: ${e.message}`));
+        }]).then(({ error: ledgerErr }) => {
+            if (ledgerErr) {
+                logger.warn(`[confirm-payment] ledger insert failed: ${ledgerErr.message}`);
+                logTxnStep({ orderId: oid, paymentId: pid, enrollmentId: data.enrollment_id, step: 'confirm_payment:ledger_insert', status: 'failed', message: ledgerErr.message });
+            }
+        }).catch((e) => {
+            logger.warn(`[confirm-payment] ledger insert threw: ${e.message}`);
+            logTxnStep({ orderId: oid, paymentId: pid, enrollmentId: data.enrollment_id, step: 'confirm_payment:ledger_insert', status: 'failed', message: e.message });
+        });
+
 
         res.status(201).json({ success: true, enrollment: data });
 

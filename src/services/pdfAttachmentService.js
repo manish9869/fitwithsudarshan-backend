@@ -1,17 +1,18 @@
 /**
  * src/services/pdfAttachmentService.js
  *
- * Fetches a PDF from a public URL (e.g. a Google Drive direct-download
- * link, Vercel Blob URL, etc.) and returns it as a nodemailer attachment
- * object. Used by the resource_vault email so the actual file doesn't need
- * to live in this repo — just point it at wherever the PDF is hosted.
- *
- * Never throws: a missing/broken URL just means "send without the
+ * Fetches a PDF from a public URL and returns it as a nodemailer attachment
+ * object. Never throws — a missing/broken URL just means "send without the
  * attachment" rather than failing the whole email.
  */
 import logger from '../config/logger.js';
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024; // 20MB safety cap
+
+// Default Comeback Blueprint PDF — used whenever no per-send `pdfUrl` and no
+// RESOURCE_VAULT_PDF_URL env var is provided.
+export const DEFAULT_RESOURCE_VAULT_PDF_URL =
+    'https://vducmiggraxtqdgt.public.blob.vercel-storage.com/RECODE%E2%84%A2%20COMEBACK%20BLUEPRINT.pdf';
 
 export async function fetchPdfAttachment(url, filename = 'RECODE-Comeback-Blueprint.pdf') {
     if (!url) return null;
