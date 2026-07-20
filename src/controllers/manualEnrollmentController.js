@@ -11,7 +11,7 @@ import { renderTemplate } from '../services/emailTemplates.js';
 import { recordPayment, getPaymentsForEnrollment, listOutstandingBalances, recomputeEnrollmentTotals } from '../services/paymentLedgerService.js';
 import { config } from '../config/env.js';
 import logger from '../config/logger.js';
-
+import { fetchPdfAttachment } from '../services/pdfAttachmentService.js';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function generateEnrollmentId() {
@@ -47,6 +47,7 @@ function toTemplateData(row) {
 export const ENROLLMENT_EMAIL_TEMPLATES = {
     enrollment_customer: { recipient: 'customer', label: 'Enrollment Confirmation' },
     welcome: { recipient: 'customer', label: 'Welcome / Onboarding' },
+    resource_vault: { recipient: 'customer', label: 'Comeback Blueprint Resources' }, // ← new
     payment_reminder: { recipient: 'customer', label: 'Payment Reminder' },
     payment_failed: { recipient: 'customer', label: 'Payment Failed Notice' },
     balance_due_reminder: { recipient: 'customer', label: 'Balance Due Reminder' },
@@ -345,8 +346,20 @@ export async function sendEnrollmentEmail(req, res) {
         const sent = [];
 
         for (const tmpl of templates) {
-            const { subject, html } = renderTemplate(tmpl, templateData);
+            const { html: rawHtml, subject } = renderTemplate(tmpl, templateData);
             const recipient = ENROLLMENT_EMAIL_TEMPLATES[tmpl].recipient === 'coach' ? coachEmail : row.customer_email;
+
+            let attachments = [];
+            let html = rawHtml;
+            if (tmpl === 'resource_vault') {
+                const pdfUrl = req.body?.pdfUrl || process.env.RESOURCE_VAULT_PDF_URL || '';
+                const attachment = await fetchPdfAttachment(pdfUrl, 'RECODE-Comeback-Blueprint.pdf');
+                if (attachment) {
+                    attachments = [attachment];
+                    // Re-render with hasAttachment so the "PDF attached" note shows correctly
+                    html = renderTemplate(tmpl, { ...templateData, hasAttachment: true }).html;
+                }
+            }
 
             await transporter.sendMail({
                 from: `"RECODE™ by FitWithSudarshan" <${config.email.gmailUser}>`,
@@ -354,6 +367,7 @@ export async function sendEnrollmentEmail(req, res) {
                 replyTo: coachEmail,
                 subject,
                 html,
+                attachments,
             });
             sent.push(tmpl);
         }
