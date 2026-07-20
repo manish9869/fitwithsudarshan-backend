@@ -36,7 +36,7 @@ const KNOWN_TEMPLATES = [
     'enrollment_coach', 'enrollment_customer', 'welcome',
     'payment_failed', 'payment_reminder',
     'contact_inquiry_coach', 'contact_inquiry_customer',
-    'assessment_coach', 'assessment_customer',
+    'assessment_coach', 'assessment_customer', 'balance_due_reminder'
 ];
 for (const name of KNOWN_TEMPLATES) {
     try { readTemplate(name); } catch { /* not fatal at boot */ }
@@ -252,6 +252,20 @@ const templateBuilders = {
             first_name: firstName,
             plan: d.plan || '—',
             main_goal: d.main_goal || '—',
+        });
+        return { subject, html };
+    },
+
+    balance_due_reminder(d) {
+        const firstName = (d.customerName || 'there').split(' ')[0];
+        const subject = `💳 Balance due — ${fmt(d.balanceDue)} remaining on your RECODE™ plan`;
+        const html = inject(readTemplate('balance_due_reminder'), {
+            firstName,
+            programName: d.programName || '—',
+            totalAmountFormatted: fmt(d.totalAmount),
+            amountPaidFormatted: fmt(d.amountPaid),
+            balanceDueFormatted: fmt(d.balanceDue),
+            enrollmentId: d.enrollmentId || '—',
         });
         return { subject, html };
     },

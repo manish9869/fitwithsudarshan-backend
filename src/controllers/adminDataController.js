@@ -504,6 +504,19 @@ export async function getDashboard(req, res) {
         ]);
 
         if (e1 || e2 || e3 || e4) throw (e1 || e2 || e3 || e4);
+
+        const { data: balanceRows, error: eBal } = await supabase
+            .from('enrollments')
+            .select('balance_due')
+            .gt('balance_due', 0);
+
+        if (eBal) throw eBal;
+
+        const totalOutstandingBalance = (balanceRows || []).reduce(
+            (s, r) => s + (Number(r.balance_due) || 0),
+            0
+        );
+
         const { count: followUpsDue, error: e5 } = await supabase
             .from('enrollments')
             .select('id', { count: 'exact', head: true })
@@ -628,6 +641,8 @@ export async function getDashboard(req, res) {
                 followUpsDue: followUpsDue || 0,
                 reviewedCount,
                 pendingReviewCount,
+                totalOutstandingBalance,
+                clientsWithBalance: (balanceRows || []).length,
             },
             charts: {
                 revenueTrend,

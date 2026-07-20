@@ -1,9 +1,3 @@
-/**
- * backend/src/routes/admin.js
- *
- * All admin panel routes live under /api/admin (mounted in app.js).
- * Every route except /login is protected by requireAdminAuth.
- */
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { requireAdminAuth } from '../middleware/adminAuth.js';
@@ -32,12 +26,16 @@ import {
     listFollowUps,
     followUpsDueCount,
     markFollowUp,
+    searchEnrollmentsByContact,
+    getEnrollmentPayments,
+    addEnrollmentPayment,
+    listBalanceDue,
+    sendBalanceReminder,
 } from '../controllers/manualEnrollmentController.js';
 import { getTxnTimelineHandler } from '../controllers/logController.js';
 
 const router = Router();
 
-// Stricter limiter on login to slow down brute-force attempts
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 8,
@@ -46,10 +44,8 @@ const loginLimiter = rateLimit({
     message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
 });
 
-// ── Public (within /api/admin) ───────────────────────────────────────────────
 router.post('/login', loginLimiter, adminLogin);
 
-// ── Everything below requires a valid admin JWT ──────────────────────────────
 router.use(requireAdminAuth);
 
 router.get('/me', adminMe);
@@ -58,8 +54,11 @@ router.post('/change-password', adminChangePassword);
 
 router.get('/dashboard', getDashboard);
 
-router.get('/enrollments', listEnrollments);
+// NOTE: /search and /export must be registered BEFORE /:id or Express will
+// try to treat "search"/"export" as an :id param.
 router.get('/enrollments/export', exportEnrollments);
+router.get('/enrollments/search', searchEnrollmentsByContact);
+router.get('/enrollments', listEnrollments);
 router.get('/enrollments/:id', getEnrollment);
 router.get('/funnel-audit', getFunnelAudit);
 router.patch('/enrollments/:id/status', updateEnrollmentStatus);
@@ -80,11 +79,16 @@ router.post('/enrollments/manual', createManualEnrollment);
 router.patch('/enrollments/manual/:id', updateManualEnrollment);
 router.post('/enrollments/:id/send-email', sendEnrollmentEmail);
 
+// ── Payment ledger / partial payments ────────────────────────────────────────
+router.get('/enrollments/:id/payments', getEnrollmentPayments);
+router.post('/enrollments/:id/payments', addEnrollmentPayment);
+router.get('/balance-due', listBalanceDue);
+router.post('/enrollments/:id/send-balance-reminder', sendBalanceReminder);
+
 router.get('/follow-ups', listFollowUps);
 router.get('/follow-ups/count', followUpsDueCount);
 router.post('/enrollments/:id/followup', markFollowUp);
 
-// ── Transaction timeline viewer — GET /api/admin/txn-timeline?orderId=... ──
 router.get('/txn-timeline', getTxnTimelineHandler);
 
 export default router;
