@@ -167,6 +167,8 @@ export async function confirmPayment(req, res, next) {
                 amount_paid: payment.amount / 100,
                 razorpay_payment_id: pid,
                 payment_date: new Date(payment.created_at * 1000).toISOString(),
+                total_amount: payment.amount / 100, balance_due: 0,
+                payment_plan_status: 'full',
                 payment_status: 'paid',
                 next_followup_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             })
@@ -207,6 +209,15 @@ export async function confirmPayment(req, res, next) {
         }
 
         // Respond immediately — email/PDF happen after
+
+        supabase.from('enrollment_payments').insert([{
+            enrollment_id: data.id,
+            amount: data.amount_paid,
+            method: 'razorpay',
+            reference: data.razorpay_payment_id,
+            paid_at: data.payment_date,
+        }]).then(() => { }).catch((e) => logger.warn(`[confirm-payment] ledger insert failed: ${e.message}`));
+
         res.status(201).json({ success: true, enrollment: data });
 
         waitUntil(sendEnrollmentConfirmation(data).catch((e) => {

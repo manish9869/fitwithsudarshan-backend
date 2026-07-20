@@ -2,12 +2,13 @@
  * src/controllers/manualEnrollmentController.js
  *
  * Manual enrollment entry (friends/direct-transfer clients who never hit the
- * website), on-demand enrollment emails, and the 7-day follow-up system.
- * Everything here sits behind requireAdminAuth (mounted in routes/admin.js).
+ * website), on-demand enrollment emails, the 7-day follow-up system, and
+ * the payment ledger (partial payments / balance-due reminders).
  */
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { getTransporter } from './emailController.js';
 import { renderTemplate } from '../services/emailTemplates.js';
+import { recordPayment, getPaymentsForEnrollment, listOutstandingBalances, recomputeEnrollmentTotals } from '../services/paymentLedgerService.js';
 import { config } from '../config/env.js';
 import logger from '../config/logger.js';
 
@@ -19,7 +20,6 @@ function generateEnrollmentId() {
     return `FIT-${year}-${random}`;
 }
 
-// Map a snake_case DB row → the camelCase shape emailTemplates.js expects
 function toTemplateData(row) {
     return {
         enrollmentId: row.enrollment_id,
@@ -39,31 +39,37 @@ function toTemplateData(row) {
         paymentDate: row.payment_date,
         goals: row.goals,
         partnerGoals: row.partner_goals,
+        totalAmount: row.total_amount,
+        balanceDue: row.balance_due,
     };
 }
 
-// ── Templates selectable from the admin panel for an enrollment record ──────
-// `recipient` decides whether the email goes to the customer on file or to
-// the coach inbox — used both here and by the frontend EmailSendMenu.
 export const ENROLLMENT_EMAIL_TEMPLATES = {
     enrollment_customer: { recipient: 'customer', label: 'Enrollment Confirmation' },
     welcome: { recipient: 'customer', label: 'Welcome / Onboarding' },
     payment_reminder: { recipient: 'customer', label: 'Payment Reminder' },
     payment_failed: { recipient: 'customer', label: 'Payment Failed Notice' },
+    balance_due_reminder: { recipient: 'customer', label: 'Balance Due Reminder' },
     enrollment_coach: { recipient: 'coach', label: 'New Enrollment Alert (Coach)' },
 };
 
 // ── POST /api/admin/enrollments/manual ───────────────────────────────────────
+// Always writes through the ledger — amount_paid is never hand-typed, it's
+// the sum of recorded payments. Supports partial payment at creation time
+// via initialPaymentAmount (defaults to the full totalAmount).
 export async function createManualEnrollment(req, res) {
     try {
         const b = req.body || {};
-
-        if (!b.customerName || !b.programName || b.amountPaid == null) {
-            return res.status(400).json({ error: 'customerName, programName and amountPaid are required.' });
+        if (!b.customerName || !b.programName || b.totalAmount == null) {
+            return res.status(400).json({ error: 'customerName, programName and totalAmount are required.' });
         }
 
         const supabase = getSupabaseAdmin();
         const paymentDate = b.paymentDate ? new Date(b.paymentDate).toISOString() : new Date().toISOString();
+        const totalAmount = Number(b.totalAmount);
+        const initialPayment = b.initialPaymentAmount != null && b.initialPaymentAmount !== ''
+            ? Number(b.initialPaymentAmount)
+            : totalAmount;
 
         const row = {
             enrollment_id: generateEnrollmentId(),
@@ -74,14 +80,17 @@ export async function createManualEnrollment(req, res) {
             plan_type: b.planType || 'individual',
             coaching_type: b.coachingType || 'online',
             duration_months: b.durationMonths || null,
-            amount_paid: Number(b.amountPaid),
-            original_amount: b.originalAmount != null ? Number(b.originalAmount) : Number(b.amountPaid),
+            amount_paid: 0,
+            original_amount: b.originalAmount != null ? Number(b.originalAmount) : totalAmount,
+            total_amount: totalAmount,
+            balance_due: totalAmount,
+            payment_plan_status: 'pending',
             coupon_code: b.couponCode || null,
             coupon_savings: b.couponSavings ? Number(b.couponSavings) : 0,
             razorpay_order_id: null,
-            razorpay_payment_id: b.paymentReference || null, // UTR / UPI ref / Razorpay payment ID
-            payment_date: paymentDate,
-            payment_status: b.paymentStatus || 'paid',
+            razorpay_payment_id: null,
+            payment_date: null,
+            payment_status: 'pending',
             age: b.age || null,
             city: b.city || null,
             weight: b.weight || null,
@@ -102,16 +111,27 @@ export async function createManualEnrollment(req, res) {
         };
 
         let { data, error } = await supabase.from('enrollments').insert([row]).select().single();
-
-        // Extremely rare enrollment_id collision — retry once with a fresh ID
         if (error?.code === '23505') {
             row.enrollment_id = generateEnrollmentId();
             ({ data, error } = await supabase.from('enrollments').insert([row]).select().single());
         }
         if (error) throw error;
 
-        logger.info(`[admin] ${req.admin.username} created manual enrollment ${data.enrollment_id}`);
-        return res.status(201).json({ enrollment: data });
+        let final = data;
+        if (initialPayment > 0) {
+            final = await recordPayment({
+                enrollmentId: data.id,
+                amount: initialPayment,
+                method: b.paymentMethod || 'other',
+                reference: b.paymentReference || null,
+                note: b.adminNote || null,
+                recordedBy: req.admin.id,
+                paidAt: paymentDate,
+            });
+        }
+
+        logger.info(`[admin] ${req.admin.username} created manual enrollment ${final.enrollment_id}`);
+        return res.status(201).json({ enrollment: final });
     } catch (err) {
         logger.error(`[admin] createManualEnrollment failed: ${err.message}`);
         return res.status(500).json({ error: 'Failed to create manual enrollment.' });
@@ -119,26 +139,17 @@ export async function createManualEnrollment(req, res) {
 }
 
 // ── PATCH /api/admin/enrollments/manual/:id ──────────────────────────────────
-// Lets the admin edit a manual enrollment (or any enrollment) after creation.
 export async function updateManualEnrollment(req, res) {
     try {
         const b = req.body || {};
-
-        if (!b.customerName || !b.programName || b.amountPaid == null) {
-            return res.status(400).json({ error: 'customerName, programName and amountPaid are required.' });
+        if (!b.customerName || !b.programName || b.totalAmount == null) {
+            return res.status(400).json({ error: 'customerName, programName and totalAmount are required.' });
         }
 
         const supabase = getSupabaseAdmin();
-
         const { data: existing, error: fetchErr } = await supabase
-            .from('enrollments')
-            .select('id')
-            .eq('id', req.params.id)
-            .single();
-
-        if (fetchErr || !existing) {
-            return res.status(404).json({ error: 'Enrollment not found.' });
-        }
+            .from('enrollments').select('id').eq('id', req.params.id).single();
+        if (fetchErr || !existing) return res.status(404).json({ error: 'Enrollment not found.' });
 
         const update = {
             customer_name: b.customerName,
@@ -148,13 +159,10 @@ export async function updateManualEnrollment(req, res) {
             plan_type: b.planType || 'individual',
             coaching_type: b.coachingType || 'online',
             duration_months: b.durationMonths || null,
-            amount_paid: Number(b.amountPaid),
-            original_amount: b.originalAmount != null ? Number(b.originalAmount) : Number(b.amountPaid),
+            total_amount: Number(b.totalAmount),
+            original_amount: b.originalAmount != null ? Number(b.originalAmount) : Number(b.totalAmount),
             coupon_code: b.couponCode || null,
             coupon_savings: b.couponSavings ? Number(b.couponSavings) : 0,
-            razorpay_payment_id: b.paymentReference || null,
-            payment_date: b.paymentDate ? new Date(b.paymentDate).toISOString() : new Date().toISOString(),
-            payment_status: b.paymentStatus || 'paid',
             age: b.age || null,
             city: b.city || null,
             weight: b.weight || null,
@@ -171,26 +179,125 @@ export async function updateManualEnrollment(req, res) {
             admin_note: b.adminNote || null,
         };
 
-        const { data, error } = await supabase
-            .from('enrollments')
-            .update(update)
-            .eq('id', req.params.id)
-            .select()
-            .single();
-
+        const { error } = await supabase.from('enrollments').update(update).eq('id', req.params.id);
         if (error) throw error;
 
-        logger.info(`[admin] ${req.admin.username} updated manual enrollment ${data.enrollment_id}`);
-        return res.json({ enrollment: data });
+        const final = await recomputeEnrollmentTotals(req.params.id);
+        logger.info(`[admin] ${req.admin.username} updated manual enrollment ${final.enrollment_id}`);
+        return res.json({ enrollment: final });
     } catch (err) {
         logger.error(`[admin] updateManualEnrollment failed: ${err.message}`);
         return res.status(500).json({ error: 'Failed to update enrollment.' });
     }
 }
 
-// ── POST /api/admin/enrollments/:id/send-email ──────────────────────────────
-// Preferred body: { template: 'enrollment_customer' | 'welcome' | 'payment_reminder' | 'payment_failed' | 'enrollment_coach' }
-// Legacy body (still supported): { type: 'customer' | 'coach' | 'both' }
+// ── GET /api/admin/enrollments/search?query=... ───────────────────────────────
+// Searches ACROSS ALL sources (website + manual). Use this before creating a
+// manual entry — if a matching pending row already exists, record the
+// payment against it instead of creating a duplicate. This is the fix for
+// the revenue mismatch.
+export async function searchEnrollmentsByContact(req, res) {
+    try {
+        const q = (req.query.query || '').trim();
+        if (!q) return res.json({ rows: [] });
+        const supabase = getSupabaseAdmin();
+        const s = q.replace(/[%,]/g, '');
+        const { data, error } = await supabase
+            .from('enrollments')
+            .select('*')
+            .or(`customer_name.ilike.%${s}%,customer_email.ilike.%${s}%,customer_phone.ilike.%${s}%,enrollment_id.ilike.%${s}%`)
+            .order('created_at', { ascending: false })
+            .limit(20);
+        if (error) throw error;
+        return res.json({ rows: data || [] });
+    } catch (err) {
+        logger.error(`[admin] searchEnrollmentsByContact failed: ${err.message}`);
+        return res.status(500).json({ error: 'Search failed.' });
+    }
+}
+
+// ── GET /api/admin/enrollments/:id/payments ───────────────────────────────────
+export async function getEnrollmentPayments(req, res) {
+    try {
+        const rows = await getPaymentsForEnrollment(req.params.id);
+        return res.json({ payments: rows });
+    } catch (err) {
+        logger.error(`[admin] getEnrollmentPayments failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to load payments.' });
+    }
+}
+
+// ── POST /api/admin/enrollments/:id/payments ──────────────────────────────────
+// body: { amount, method, reference, note, paidAt }
+export async function addEnrollmentPayment(req, res) {
+    try {
+        const { amount, method, reference, note, paidAt } = req.body || {};
+        if (!amount || Number(amount) <= 0) {
+            return res.status(400).json({ error: 'A positive amount is required.' });
+        }
+        const enrollment = await recordPayment({
+            enrollmentId: req.params.id,
+            amount, method, reference, note, paidAt,
+            recordedBy: req.admin.id,
+        });
+        logger.info(`[admin] ${req.admin.username} recorded payment of ${amount} for ${enrollment.enrollment_id}`);
+        return res.status(201).json({ enrollment });
+    } catch (err) {
+        logger.error(`[admin] addEnrollmentPayment failed: ${err.message}`);
+        return res.status(400).json({ error: err.message || 'Failed to record payment.' });
+    }
+}
+
+// ── GET /api/admin/balance-due ────────────────────────────────────────────────
+export async function listBalanceDue(req, res) {
+    try {
+        const dueOnly = req.query.due === 'true';
+        const rows = await listOutstandingBalances({ dueOnly });
+        return res.json({ rows, total: rows.length });
+    } catch (err) {
+        logger.error(`[admin] listBalanceDue failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to load outstanding balances.' });
+    }
+}
+
+// ── POST /api/admin/enrollments/:id/send-balance-reminder ─────────────────────
+export async function sendBalanceReminder(req, res) {
+    try {
+        const supabase = getSupabaseAdmin();
+        const { data: row, error } = await supabase.from('enrollments').select('*').eq('id', req.params.id).single();
+        if (error || !row) return res.status(404).json({ error: 'Enrollment not found.' });
+        if (!row.customer_email) return res.status(400).json({ error: 'This enrollment has no customer email on file.' });
+        if (!(Number(row.balance_due) > 0)) return res.status(400).json({ error: 'This enrollment has no outstanding balance.' });
+
+        if (!config.email.gmailUser || !config.email.gmailAppPassword) {
+            return res.status(500).json({ error: 'Email is not configured on the server.' });
+        }
+
+        const transporter = getTransporter();
+        const coachEmail = config.email.coachEmail || config.email.gmailUser;
+        const { subject, html } = renderTemplate('balance_due_reminder', toTemplateData(row));
+
+        await transporter.sendMail({
+            from: `"RECODE™ by FitWithSudarshan" <${config.email.gmailUser}>`,
+            to: row.customer_email,
+            replyTo: coachEmail,
+            subject, html,
+        });
+
+        await supabase.from('enrollments').update({
+            last_payment_reminder_at: new Date().toISOString(),
+            next_payment_reminder_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        }).eq('id', req.params.id);
+
+        logger.info(`[admin] ${req.admin.username} sent balance reminder for ${row.enrollment_id}`);
+        return res.json({ success: true });
+    } catch (err) {
+        logger.error(`[admin] sendBalanceReminder failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to send reminder.' });
+    }
+}
+
+// ── POST /api/admin/enrollments/:id/send-email (unchanged) ───────────────────
 export async function sendEnrollmentEmail(req, res) {
     try {
         const supabase = getSupabaseAdmin();
@@ -213,7 +320,6 @@ export async function sendEnrollmentEmail(req, res) {
             }
             templates = [tmpl];
         } else {
-            // Legacy fallback for any older callers still sending { type }
             const type = req.body?.type || 'customer';
             if (type === 'customer') templates = ['enrollment_customer'];
             else if (type === 'coach') templates = ['enrollment_coach'];
@@ -261,11 +367,9 @@ export async function sendEnrollmentEmail(req, res) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// FOLLOW-UPS
+// FOLLOW-UPS (unchanged)
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── GET /api/admin/follow-ups ────────────────────────────────────────────────
-// Query params: due ('true' = only overdue/today), search, page, pageSize
 export async function listFollowUps(req, res) {
     try {
         const supabase = getSupabaseAdmin();
@@ -300,7 +404,6 @@ export async function listFollowUps(req, res) {
     }
 }
 
-// ── GET /api/admin/follow-ups/count ──────────────────────────────────────────
 export async function followUpsDueCount(req, res) {
     try {
         const supabase = getSupabaseAdmin();
@@ -319,8 +422,6 @@ export async function followUpsDueCount(req, res) {
     }
 }
 
-// ── POST /api/admin/enrollments/:id/followup ─────────────────────────────────
-// body: { action: 'completed' | 'snoozed' | 'stopped', note?, days? }
 export async function markFollowUp(req, res) {
     try {
         const { action, note, days } = req.body || {};

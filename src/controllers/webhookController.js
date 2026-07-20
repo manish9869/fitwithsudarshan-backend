@@ -35,6 +35,8 @@ export async function handleRazorpayWebhook(req, res) {
         const { data, error } = await supabase
             .from('enrollments')
             .update({
+                total_amount: payment.amount / 100, balance_due: 0,
+                payment_plan_status: 'full',
                 payment_status: 'paid',
                 razorpay_payment_id: paymentId,
                 amount_paid: payment.amount / 100,
@@ -60,6 +62,13 @@ export async function handleRazorpayWebhook(req, res) {
         logger.info(`[webhook] ✅ CONFIRMED — ${data.enrollment_id}`);
         await logTxnStep({ orderId, paymentId, enrollmentId: data.enrollment_id, step: 'webhook:db_update', status: 'success' });
 
+        supabase.from('enrollment_payments').insert([{
+            enrollment_id: data.id,
+            amount: data.amount_paid,
+            method: 'razorpay',
+            reference: data.razorpay_payment_id,
+            paid_at: data.payment_date,
+        }]).then(() => { }).catch((e) => logger.warn(`[confirm-payment] ledger insert failed: ${e.message}`));
         res.status(200).json({ received: true });
 
         waitUntil(sendEnrollmentConfirmation(data).catch((e) => {
