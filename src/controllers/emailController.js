@@ -3,8 +3,7 @@ import { renderTemplate, TEMPLATE_NAMES } from '../services/emailTemplates.js';
 import { config } from '../config/env.js';
 import logger from '../config/logger.js';
 import { generateInvoiceBuffer } from '../services/invoiceService.js';
-import { fetchPdfAttachment } from '../services/pdfAttachmentService.js';
-
+import { fetchPdfAttachment, DEFAULT_RESOURCE_VAULT_PDF_URL } from '../services/pdfAttachmentService.js';
 // ── Reusable transporter ──────────────────────────────────────────────────────
 export let _transporter = null;
 export function getTransporter() {
@@ -49,7 +48,7 @@ export async function sendEmail(req, res, next) {
     let attachments = [];
     let hasAttachment = false;
     if (template === 'resource_vault') {
-      const pdfUrl = data.pdfUrl || process.env.RESOURCE_VAULT_PDF_URL || '';
+      const pdfUrl = data.pdfUrl || process.env.RESOURCE_VAULT_PDF_URL || DEFAULT_RESOURCE_VAULT_PDF_URL;
       const attachment = await fetchPdfAttachment(pdfUrl, 'RECODE-Comeback-Blueprint.pdf');
       if (attachment) {
         attachments = [attachment];

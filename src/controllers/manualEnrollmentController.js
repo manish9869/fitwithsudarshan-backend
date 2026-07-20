@@ -11,7 +11,7 @@ import { renderTemplate } from '../services/emailTemplates.js';
 import { recordPayment, getPaymentsForEnrollment, listOutstandingBalances, recomputeEnrollmentTotals } from '../services/paymentLedgerService.js';
 import { config } from '../config/env.js';
 import logger from '../config/logger.js';
-import { fetchPdfAttachment } from '../services/pdfAttachmentService.js';
+import { fetchPdfAttachment, DEFAULT_RESOURCE_VAULT_PDF_URL } from '../services/pdfAttachmentService.js';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function generateEnrollmentId() {
@@ -352,7 +352,7 @@ export async function sendEnrollmentEmail(req, res) {
             let attachments = [];
             let html = rawHtml;
             if (tmpl === 'resource_vault') {
-                const pdfUrl = req.body?.pdfUrl || process.env.RESOURCE_VAULT_PDF_URL || '';
+                const pdfUrl = req.body?.pdfUrl || process.env.RESOURCE_VAULT_PDF_URL || DEFAULT_RESOURCE_VAULT_PDF_URL;
                 const attachment = await fetchPdfAttachment(pdfUrl, 'RECODE-Comeback-Blueprint.pdf');
                 if (attachment) {
                     attachments = [attachment];
