@@ -7,6 +7,10 @@
  *    before they hit the network — shaves ~200–800ms off each render.
  *  - Template HTML is built synchronously before handing off to Puppeteer,
  *    so the browser only does layout work, not template logic.
+ *
+ * NOTE: readInvoiceTemplate / fmt / fmtDate / escapeHtml / replaceTemplateValues
+ * are exported so paymentReceiptService.js can reuse the exact same template
+ * + helpers for per-payment receipts instead of duplicating them.
  */
 
 import fs from 'fs/promises';
@@ -22,14 +26,14 @@ const BRAND_LOGO_URL =
 
 // Cache the invoice HTML template — it never changes at runtime
 let _invoiceTemplate = null;
-async function readInvoiceTemplate() {
+export async function readInvoiceTemplate() {
     if (_invoiceTemplate) return _invoiceTemplate;
     const templatePath = path.resolve(__dirname, '../templates/invoice.html');
     _invoiceTemplate = await fs.readFile(templatePath, 'utf8');
     return _invoiceTemplate;
 }
 
-function fmt(amount) {
+export function fmt(amount) {
     return new Intl.NumberFormat('en-IN', {
         style: 'currency',
         currency: 'INR',
@@ -37,7 +41,7 @@ function fmt(amount) {
     }).format(Number(amount || 0));
 }
 
-function fmtDate(iso) {
+export function fmtDate(iso) {
     if (!iso) return '—';
     const d = new Date(iso);
     return isNaN(d) ? '—' : new Intl.DateTimeFormat('en-IN', {
@@ -46,13 +50,13 @@ function fmtDate(iso) {
     }).format(d);
 }
 
-function escapeHtml(value) {
+export function escapeHtml(value) {
     return String(value ?? '—')
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
-function replaceTemplateValues(template, values) {
+export function replaceTemplateValues(template, values) {
     return Object.entries(values).reduce((html, [key, value]) => {
         return html.replaceAll(`{{${key}}}`, value ?? '');
     }, template);

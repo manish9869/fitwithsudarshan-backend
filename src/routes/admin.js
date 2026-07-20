@@ -31,6 +31,7 @@ import {
     addEnrollmentPayment,
     listBalanceDue,
     sendBalanceReminder,
+    sendPaymentReceiptEmail,
 } from '../controllers/manualEnrollmentController.js';
 import { getTxnTimelineHandler } from '../controllers/logController.js';
 
@@ -82,6 +83,7 @@ router.post('/enrollments/:id/send-email', sendEnrollmentEmail);
 // ── Payment ledger / partial payments ────────────────────────────────────────
 router.get('/enrollments/:id/payments', getEnrollmentPayments);
 router.post('/enrollments/:id/payments', addEnrollmentPayment);
+router.post('/enrollments/:id/payments/:paymentId/send-receipt', sendPaymentReceiptEmail);
 router.get('/balance-due', listBalanceDue);
 router.post('/enrollments/:id/send-balance-reminder', sendBalanceReminder);
 

@@ -28,7 +28,7 @@ const KNOWN_TEMPLATES = [
     'payment_failed', 'payment_reminder',
     'contact_inquiry_coach', 'contact_inquiry_customer',
     'assessment_coach', 'assessment_customer', 'balance_due_reminder',
-    'resource_vault',
+    'resource_vault', 'payment_receipt_email',
 ];
 for (const name of KNOWN_TEMPLATES) {
     try { readTemplate(name); } catch { /* not fatal at boot */ }
@@ -268,6 +268,36 @@ const templateBuilders = {
             balanceDueFormatted: fmt(d.balanceDue),
             paidPercent: String(paidPercent),
             enrollmentId: d.enrollmentId || '—',
+        });
+        return { subject, html };
+    },
+
+    payment_receipt_email(d) {
+        const firstName = (d.customerName || 'there').split(' ')[0];
+        const totalAmt = Number(d.totalAmount || 0);
+        const paidAmt = Number(d.paidToDate ?? d.amountPaid ?? 0);
+        const paidPercent = totalAmt > 0
+            ? Math.min(100, Math.max(0, Math.round((paidAmt / totalAmt) * 100)))
+            : 100;
+        const balanceDue = Number(d.balanceDue || 0);
+        const isFullyPaid = balanceDue <= 0;
+
+        const subject = isFullyPaid
+            ? `✅ Payment Received — You're fully paid up on RECODE™!`
+            : `✅ Payment Received — ${fmt(d.amountPaid)} towards your RECODE™ plan`;
+
+        const html = inject(readTemplate('payment_receipt_email'), {
+            firstName,
+            programName: d.programName || '—',
+            amountPaidFormatted: fmt(d.amountPaid),
+            paidToDateFormatted: fmt(d.paidToDate),
+            totalAmountFormatted: fmt(d.totalAmount),
+            balanceDueFormatted: fmt(d.balanceDue),
+            paidPercent: String(paidPercent),
+            paymentDate: fmtDate(d.paymentDate),
+            reference: d.reference || '—',
+            enrollmentId: d.enrollmentId || '—',
+            isFullyPaid,
         });
         return { subject, html };
     },

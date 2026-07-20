@@ -11,7 +11,7 @@ import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { logTxnStep } from '../services/txnLogService.js';
 import { generateEnrollmentId } from '../utils/enrollmentId.js';
 import { waitUntil } from '@vercel/functions';
-
+import { generatePaymentReceiptBuffer } from '../services/paymentReceiptService.js';
 // ── POST /api/create-order ────────────────────────────────────────────────
 // Client no longer sends `amount` — the server resolves the real price and
 // validates any coupon. This is what stops price tampering: the client
@@ -357,6 +357,27 @@ export async function downloadInvoice(req, res, next) {
         const invoiceId = enrollment.enrollmentId || enrollment.enrollment_id;
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="RECODE-Invoice-${invoiceId}.pdf"`);
+        res.setHeader('Content-Length', buffer.length);
+        return res.send(buffer);
+    } catch (err) {
+        next(err);
+    }
+}
+
+// ── POST /api/payment-receipt ─────────────────────────────────────────────
+// Stateless, mirrors /api/invoice — the caller (admin panel) already has the
+// enrollment + payment data loaded, so no DB lookup is needed here.
+// Body: { enrollment, payment, paidToDate }
+export async function downloadPaymentReceipt(req, res, next) {
+    try {
+        const { enrollment, payment, paidToDate } = req.body || {};
+        if (!enrollment || !payment || payment.amount == null) {
+            return res.status(400).json({ error: 'Invalid receipt data.' });
+        }
+        const buffer = await generatePaymentReceiptBuffer(enrollment, payment, paidToDate);
+        const invoiceId = enrollment.enrollmentId || enrollment.enrollment_id || 'receipt';
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="RECODE-Receipt-${invoiceId}.pdf"`);
         res.setHeader('Content-Length', buffer.length);
         return res.send(buffer);
     } catch (err) {
