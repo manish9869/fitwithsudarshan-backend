@@ -31,7 +31,7 @@ import {
     addEnrollmentPayment,
     listBalanceDue,
     sendBalanceReminder,
-    sendPaymentReceiptEmail,
+    sendPaymentReceiptEmail, deleteManualEnrollment,
 } from '../controllers/manualEnrollmentController.js';
 import { getTxnTimelineHandler } from '../controllers/logController.js';
 
@@ -63,6 +63,8 @@ router.get('/enrollments', listEnrollments);
 router.get('/enrollments/:id', getEnrollment);
 router.get('/funnel-audit', getFunnelAudit);
 router.patch('/enrollments/:id/status', updateEnrollmentStatus);
+router.delete('/enrollments/manual/:id', deleteManualEnrollment);
+
 
 router.get('/assessments', listAssessments);
 router.get('/assessments/:id', getAssessment);

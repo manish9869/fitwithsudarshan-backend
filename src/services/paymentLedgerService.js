@@ -1,12 +1,3 @@
-/**
- * src/services/paymentLedgerService.js
- *
- * Single source of truth for money received against an enrollment, no
- * matter the channel (website Razorpay, Razorpay payment link, UPI, bank
- * transfer, cash). enrollments.amount_paid / balance_due are ALWAYS
- * recomputed from this ledger — never hand-edited — so revenue reporting
- * can't drift out of sync with reality.
- */
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 
 export async function recordPayment({ enrollmentId, amount, method = 'other', reference, note, recordedBy, paidAt }) {
@@ -37,20 +28,67 @@ export async function recordPayment({ enrollmentId, amount, method = 'other', re
     return recomputeEnrollmentTotals(enrollmentId);
 }
 
+// ── NEW: edit the amount/method/reference/date of the most recent payment
+// on an enrollment's ledger, or record the first payment if none exists.
+// This is what powers "edit amount" + "payment id/date not filling on
+// edit" on the Manual Enrollment page — previously those form fields were
+// captured but never actually written anywhere.
+export async function upsertLatestPayment({ enrollmentId, amount, method, reference, paidAt, recordedBy }) {
+    const supabase = getSupabaseAdmin();
+
+    const { data: latest, error: fetchErr } = await supabase
+        .from('enrollment_payments')
+        .select('*')
+        .eq('enrollment_id', enrollmentId)
+        .order('paid_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (fetchErr) throw new Error(fetchErr.message);
+
+    if (latest) {
+        const update = {};
+        if (amount != null && !Number.isNaN(amount)) update.amount = amount;
+        if (method) update.method = method;
+        if (reference !== undefined) update.reference = reference || null;
+        if (paidAt) update.paid_at = new Date(paidAt).toISOString();
+        if (Object.keys(update).length === 0) return;
+
+        const { error } = await supabase.from('enrollment_payments').update(update).eq('id', latest.id);
+        if (error) throw new Error(`Failed to update payment: ${error.message}`);
+    } else if (amount != null && amount > 0) {
+        const { error } = await supabase.from('enrollment_payments').insert([{
+            enrollment_id: enrollmentId,
+            amount,
+            method: method || 'other',
+            reference: reference || null,
+            note: null,
+            recorded_by: recordedBy || null,
+            paid_at: paidAt ? new Date(paidAt).toISOString() : new Date().toISOString(),
+        }]);
+        if (error) throw new Error(`Failed to record payment: ${error.message}`);
+    }
+}
+
 export async function recomputeEnrollmentTotals(enrollmentId) {
     const supabase = getSupabaseAdmin();
 
     const { data: payments, error: payErr } = await supabase
         .from('enrollment_payments')
-        .select('amount')
-        .eq('enrollment_id', enrollmentId);
+        .select('amount, paid_at')
+        .eq('enrollment_id', enrollmentId)
+        .order('paid_at', { ascending: true });
     if (payErr) throw new Error(payErr.message);
 
     const amountPaid = (payments || []).reduce((s, p) => s + Number(p.amount || 0), 0);
+    // FIX: payment_date was never propagated from the ledger for manual
+    // (or ledger-corrected) enrollments — this is why "Date" showed blank
+    // in the table whenever the row's source wasn't the direct Razorpay
+    // checkout flow.
+    const latestPaidAt = payments && payments.length ? payments[payments.length - 1].paid_at : null;
 
     const { data: enrollment, error: fetchErr } = await supabase
         .from('enrollments')
-        .select('total_amount, amount_paid')
+        .select('total_amount, amount_paid, payment_date')
         .eq('id', enrollmentId)
         .single();
     if (fetchErr || !enrollment) throw new Error('Enrollment not found.');
@@ -69,6 +107,7 @@ export async function recomputeEnrollmentTotals(enrollmentId) {
             ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
             : null,
     };
+    if (latestPaidAt) update.payment_date = latestPaidAt;
 
     const { data, error } = await supabase
         .from('enrollments')
@@ -106,4 +145,17 @@ export async function listOutstandingBalances({ dueOnly = false } = {}) {
     const { data, error } = await query;
     if (error) throw new Error(error.message);
     return data || [];
+}
+
+// ── NEW: delete an enrollment and its full payment ledger (FK-safe order).
+export async function deleteEnrollmentWithPayments(enrollmentId) {
+    const supabase = getSupabaseAdmin();
+    const { error: payErr } = await supabase.from('enrollment_payments').delete().eq('enrollment_id', enrollmentId);
+    if (payErr) throw new Error(`Failed to delete payment history: ${payErr.message}`);
+
+    // Best-effort cleanup of any admin note attached to this record.
+    await supabase.from('admin_notes').delete().eq('record_type', 'enrollment').eq('record_id', enrollmentId);
+
+    const { error } = await supabase.from('enrollments').delete().eq('id', enrollmentId);
+    if (error) throw new Error(`Failed to delete enrollment: ${error.message}`);
 }
