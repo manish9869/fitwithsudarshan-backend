@@ -75,7 +75,7 @@ export async function createManualEnrollment(req, res) {
 
         const row = {
             enrollment_id: generateEnrollmentId(),
-            customer_name: b.customerName,
+            customer_name: toTitleCase(b.customerName),
             customer_email: b.customerEmail || null,
             customer_phone: b.customerPhone || null,
             program_name: b.programName,
@@ -99,7 +99,7 @@ export async function createManualEnrollment(req, res) {
             goals: Array.isArray(b.goals) ? b.goals : (b.goals ? [b.goals] : []),
             medical_issue: b.medicalIssue || null,
             medical_note: b.medicalNote || null,
-            partner_name: b.partnerName || null,
+            partner_name: b.partnerName ? toTitleCase(b.partnerName) : null,
             partner_age: b.partnerAge || null,
             partner_weight: b.partnerWeight || null,
             partner_goals: Array.isArray(b.partnerGoals) ? b.partnerGoals : (b.partnerGoals ? [b.partnerGoals] : null),
@@ -154,7 +154,7 @@ export async function updateManualEnrollment(req, res) {
         if (fetchErr || !existing) return res.status(404).json({ error: 'Enrollment not found.' });
 
         const update = {
-            customer_name: b.customerName,
+            customer_name: toTitleCase(b.customerName),
             customer_email: b.customerEmail || null,
             customer_phone: b.customerPhone || null,
             program_name: b.programName,
@@ -171,7 +171,7 @@ export async function updateManualEnrollment(req, res) {
             goals: Array.isArray(b.goals) ? b.goals : (b.goals ? [b.goals] : []),
             medical_issue: b.medicalIssue || null,
             medical_note: b.medicalNote || null,
-            partner_name: b.partnerName || null,
+            partner_name: b.partnerName ? toTitleCase(b.partnerName) : null,
             partner_age: b.partnerAge || null,
             partner_weight: b.partnerWeight || null,
             partner_goals: Array.isArray(b.partnerGoals) ? b.partnerGoals : (b.partnerGoals ? [b.partnerGoals] : null),
@@ -216,10 +216,16 @@ export async function deleteManualEnrollment(req, res) {
             .from('enrollments').select('id, enrollment_id, customer_name').eq('id', req.params.id).single();
         if (fetchErr || !existing) return res.status(404).json({ error: 'Enrollment not found.' });
 
-        await deleteEnrollmentWithPayments(req.params.id);
+        const { data, error } = await supabase
+            .from('enrollments')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+        if (error) throw error;
 
-        logger.info(`[admin] ${req.admin.username} deleted enrollment ${existing.enrollment_id} (${existing.customer_name})`);
-        return res.json({ success: true });
+        logger.info(`[admin] ${req.admin.username} soft-deleted enrollment ${existing.enrollment_id} (${existing.customer_name})`);
+        return res.json({ success: true, enrollment: data });
     } catch (err) {
         logger.error(`[admin] deleteManualEnrollment failed: ${err.message}`);
         return res.status(500).json({ error: err.message || 'Failed to delete enrollment.' });

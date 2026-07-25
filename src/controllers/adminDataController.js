@@ -53,6 +53,9 @@ export async function listEnrollments(req, res) {
 
         let query = supabase.from('enrollments').select('*', { count: 'exact' });
 
+        if (req.query.includeDeleted !== 'true') {
+            query = query.is('deleted_at', null);
+        }
         if (search.trim()) {
             const s = search.trim().replace(/[%,]/g, '');
             query = query.or(
@@ -190,7 +193,9 @@ export async function listAssessments(req, res) {
         const pg = Math.max(1, parseInt(page, 10) || 1);
 
         let query = supabase.from('assessments').select('*', { count: 'exact' });
-
+        if (req.query.includeDeleted !== 'true') {
+            query = query.is('deleted_at', null);
+        }
         if (search.trim()) {
             const s = search.trim().replace(/[%,]/g, '');
             query = query.or(
@@ -218,6 +223,48 @@ export async function listAssessments(req, res) {
     } catch (err) {
         logger.error(`[admin] listAssessments failed: ${err.message}`);
         return res.status(500).json({ error: 'Failed to load assessments.' });
+    }
+}
+
+// ── DELETE /api/admin/enrollments/:id — soft delete ──────────────────────────
+export async function softDeleteEnrollment(req, res) {
+    try {
+        const supabase = getSupabaseAdmin();
+        const { data, error } = await supabase
+            .from('enrollments')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error || !data) return res.status(404).json({ error: 'Enrollment not found.' });
+
+        logger.info(`[admin] ${req.admin.username} soft-deleted enrollment ${data.enrollment_id}`);
+        return res.json({ success: true, enrollment: data });
+    } catch (err) {
+        logger.error(`[admin] softDeleteEnrollment failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to delete enrollment.' });
+    }
+}
+
+// ── DELETE /api/admin/assessments/:id — soft delete ───────────────────────────
+export async function softDeleteAssessment(req, res) {
+    try {
+        const supabase = getSupabaseAdmin();
+        const { data, error } = await supabase
+            .from('assessments')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error || !data) return res.status(404).json({ error: 'Assessment not found.' });
+
+        logger.info(`[admin] ${req.admin.username} soft-deleted assessment ${data.id}`);
+        return res.json({ success: true, assessment: data });
+    } catch (err) {
+        logger.error(`[admin] softDeleteAssessment failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to delete assessment.' });
     }
 }
 
