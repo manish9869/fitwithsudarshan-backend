@@ -8,7 +8,7 @@
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { getTransporter } from './emailController.js';
 import { renderTemplate } from '../services/emailTemplates.js';
-import { recordPayment, getPaymentsForEnrollment, listOutstandingBalances, recomputeEnrollmentTotals } from '../services/paymentLedgerService.js';
+import { recordPayment, getPaymentsForEnrollment, listOutstandingBalances, recomputeEnrollmentTotals, upsertLatestPayment, deleteEnrollmentWithPayments } from '../services/paymentLedgerService.js';
 import { config } from '../config/env.js';
 import logger from '../config/logger.js';
 import { fetchPdfAttachment, DEFAULT_RESOURCE_VAULT_PDF_URL } from '../services/pdfAttachmentService.js';
@@ -184,12 +184,45 @@ export async function updateManualEnrollment(req, res) {
         const { error } = await supabase.from('enrollments').update(update).eq('id', req.params.id);
         if (error) throw error;
 
+        // ── Edit the payment ledger — lets the admin correct the amount,
+        // method, reference or date of the most recent payment (or record
+        // the very first payment if none exists yet). Previously these
+        // fields were accepted by this endpoint and silently discarded.
+        if (b.paymentAmount !== undefined || b.paymentMethod !== undefined || b.paymentReference !== undefined || b.paymentDate !== undefined) {
+            await upsertLatestPayment({
+                enrollmentId: req.params.id,
+                amount: b.paymentAmount !== undefined && b.paymentAmount !== '' ? Number(b.paymentAmount) : undefined,
+                method: b.paymentMethod || undefined,
+                reference: b.paymentReference !== undefined ? b.paymentReference : undefined,
+                paidAt: b.paymentDate || undefined,
+                recordedBy: req.admin.id,
+            });
+        }
+
         const final = await recomputeEnrollmentTotals(req.params.id);
         logger.info(`[admin] ${req.admin.username} updated manual enrollment ${final.enrollment_id}`);
         return res.json({ enrollment: final });
     } catch (err) {
         logger.error(`[admin] updateManualEnrollment failed: ${err.message}`);
         return res.status(500).json({ error: 'Failed to update enrollment.' });
+    }
+}
+
+// ── DELETE /api/admin/enrollments/manual/:id ──────────────────────────────
+export async function deleteManualEnrollment(req, res) {
+    try {
+        const supabase = getSupabaseAdmin();
+        const { data: existing, error: fetchErr } = await supabase
+            .from('enrollments').select('id, enrollment_id, customer_name').eq('id', req.params.id).single();
+        if (fetchErr || !existing) return res.status(404).json({ error: 'Enrollment not found.' });
+
+        await deleteEnrollmentWithPayments(req.params.id);
+
+        logger.info(`[admin] ${req.admin.username} deleted enrollment ${existing.enrollment_id} (${existing.customer_name})`);
+        return res.json({ success: true });
+    } catch (err) {
+        logger.error(`[admin] deleteManualEnrollment failed: ${err.message}`);
+        return res.status(500).json({ error: err.message || 'Failed to delete enrollment.' });
     }
 }
 
