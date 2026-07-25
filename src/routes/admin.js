@@ -13,6 +13,7 @@ import {
     updateAssessmentReviewed,
     upsertNote,
     getDashboard, getFunnelAudit,
+    softDeleteEnrollment, softDeleteAssessment,
 } from '../controllers/adminDataController.js';
 import { exportAssessments } from '../controllers/adminDataController.js';
 
@@ -64,13 +65,13 @@ router.get('/enrollments/:id', getEnrollment);
 router.get('/funnel-audit', getFunnelAudit);
 router.patch('/enrollments/:id/status', updateEnrollmentStatus);
 router.delete('/enrollments/manual/:id', deleteManualEnrollment);
-
+router.delete('/enrollments/:id', softDeleteEnrollment);
 
 router.get('/assessments', listAssessments);
 router.get('/assessments/:id', getAssessment);
 router.patch('/assessments/:id/status', updateAssessmentStatus);
 router.patch('/assessments/:id/reviewed', updateAssessmentReviewed);
-
+router.delete('/assessments/:id', softDeleteAssessment);
 router.put('/notes', upsertNote);
 
 router.get('/coupons', adminListCoupons);

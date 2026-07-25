@@ -86,8 +86,8 @@ export async function submitAssessment(fields, files = {}) {
 
     const row = {
         id: assessmentId,
-        first_name: fields.firstName,
-        last_name: fields.lastName || null,
+        first_name: toTitleCase(fields.firstName),
+        last_name: fields.lastName ? toTitleCase(fields.lastName) : null,
         email: fields.email || null,   // ← added: customer email for confirmation
         whatsapp: fields.whatsapp,
         age: fields.age,

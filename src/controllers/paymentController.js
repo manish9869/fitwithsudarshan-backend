@@ -69,7 +69,7 @@ export async function createOrder(req, res, next) {
         const supabase = getSupabaseAdmin();
         const pendingRow = {
             enrollment_id: enrollmentId,
-            customer_name: customerName,
+            customer_name: toTitleCase(customerName),
             customer_email: customerEmail,
             customer_phone: customerPhone || null,
             program_name: programName || null,
@@ -90,7 +90,7 @@ export async function createOrder(req, res, next) {
             goals: goals || [],
             medical_issue: medicalIssue || null,
             medical_note: medicalNote || null,
-            partner_name: partnerName || null,
+            partner_name: partnerName ? toTitleCase(partnerName) : null,
             partner_age: partnerAge || null,
             partner_weight: partnerWeight || null,
             partner_goals: partnerGoals?.length ? partnerGoals : null,
