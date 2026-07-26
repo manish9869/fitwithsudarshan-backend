@@ -23,6 +23,9 @@ import {
     adminListCoupons, adminCreateCoupon, adminUpdateCoupon, adminDeleteCoupon,
 } from '../controllers/couponController.js';
 import {
+    adminListDietPlans, adminGetDietPlan, adminCreateDietPlan, adminUpdateDietPlan, adminDeleteDietPlan,
+} from '../controllers/dietPlanController.js';
+import {
     createManualEnrollment,
     updateManualEnrollment,
     sendEnrollmentEmail,
@@ -93,6 +96,12 @@ router.get('/coupons', adminListCoupons);
 router.post('/coupons', adminCreateCoupon);
 router.patch('/coupons/:id', adminUpdateCoupon);
 router.delete('/coupons/:id', adminDeleteCoupon);
+
+router.get('/diet-plans', adminListDietPlans);
+router.post('/diet-plans', adminCreateDietPlan);
+router.get('/diet-plans/:id', adminGetDietPlan);
+router.patch('/diet-plans/:id', adminUpdateDietPlan);
+router.delete('/diet-plans/:id', adminDeleteDietPlan);
 
 router.post('/enrollments/manual', createManualEnrollment);
 router.patch('/enrollments/manual/:id', updateManualEnrollment);
