@@ -34,6 +34,7 @@ const SITE_KEYS = [
     'sticky_cta',
     'floating_whatsapp',
     'pricing_sale_flags',
+    'pricing_popular_flags',
 ];
 
 function assertTable(table) {
@@ -333,6 +334,7 @@ export async function getPublicContent() {
         stickyCta,
         floatingWhatsapp,
         saleFlags,
+        popularFlags,
         coachingTypes,
         durationsRows,
         pricingRows,
@@ -359,6 +361,7 @@ export async function getPublicContent() {
         getSiteContent('sticky_cta'),
         getSiteContent('floating_whatsapp'),
         getSiteContent('pricing_sale_flags'),
+        getSiteContent('pricing_popular_flags'),
 
         listRows('coaching_types'),
         listRows('durations'),
@@ -378,6 +381,11 @@ export async function getPublicContent() {
     // Replaces the old durations.on_sale column, which applied to every
     // coaching type and plan type at once instead of one specific cell.
     const saleFlagsMapped = (saleFlags && typeof saleFlags === 'object' && !Array.isArray(saleFlags)) ? saleFlags : {};
+    // Map keyed by "coachingTypeId:planType:durationMonths" → true. Replaces
+    // the old durations.popular column, which marked a duration as "Most
+    // Popular" for every coaching type and plan type at once instead of one
+    // specific cell.
+    const popularFlagsMapped = (popularFlags && typeof popularFlags === 'object' && !Array.isArray(popularFlags)) ? popularFlags : {};
 
     const data = {
         brand: brand || {},
@@ -409,6 +417,7 @@ export async function getPublicContent() {
         stickyCta: stickyCta || {},
         floatingWhatsapp: floatingWhatsapp || {},
         saleFlags: saleFlagsMapped,
+        popularFlags: popularFlagsMapped,
 
         coachingTypes: coachingTypes
             .filter((c) => c.active)
