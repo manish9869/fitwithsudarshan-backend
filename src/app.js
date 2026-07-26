@@ -16,7 +16,6 @@ import adminRoutes from './routes/admin.js';
 import contentRoutes from './routes/content.js';
 
 const app = express();
-console.log(process.env.PORT);
 app.set('trust proxy', 1);
 
 app.use(helmetMiddleware);

@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import express from 'express';
-import { createOrder, confirmPayment, healthCheck, downloadInvoice, downloadPaymentReceipt } from '../controllers/paymentController.js';
-import { sendEmail, sendEnrollmentEmails } from '../controllers/emailController.js';
-import { paymentLimiter, emailLimiter } from '../middleware/security.js';
+import { createOrder, confirmPayment, healthCheck, downloadInvoice } from '../controllers/paymentController.js';
+import { sendEmail } from '../controllers/emailController.js';
+import { paymentLimiter, emailLimiter, assessmentLimiter } from '../middleware/security.js';
 import { assessmentUpload, submitAssessmentHandler } from '../controllers/assessmentController.js';
-import { validateCoupon, redeemCoupon } from '../controllers/couponController.js';
+import { validateCoupon } from '../controllers/couponController.js';
 import { logClientEvent } from '../controllers/logController.js';
 import { handleRazorpayWebhook } from '../controllers/webhookController.js';
 
@@ -20,16 +20,21 @@ router.post('/confirm-payment', paymentLimiter, confirmPayment);
 
 // ── Email routes — rate limited: real sends from the business inbox +
 //    headless-Chrome PDF generation, both expensive to abuse. ────────────────
+// `sendEmail` itself whitelists which templates this public route may use
+// (contact-form templates only) — see emailController.js.
 router.post('/send-email', emailLimiter, sendEmail);
-router.post('/send-enrollment-emails', emailLimiter, sendEnrollmentEmails);
+// Verified against the DB by enrollmentId + razorpayPaymentId — see
+// downloadInvoice() in paymentController.js. Admin-panel invoice/receipt
+// downloads go through the authenticated /api/admin/enrollments/:id/invoice
+// and /api/admin/enrollments/:id/payments/:paymentId/receipt routes instead.
 router.post('/invoice', emailLimiter, downloadInvoice);
-router.post('/payment-receipt', emailLimiter, downloadPaymentReceipt);
 
-// ── Onboarding assessment ─────────────────────────────────────────────────────
-router.post('/submit-assessment', assessmentUpload, submitAssessmentHandler);
+// ── Onboarding assessment — own limiter: accepts up to 3 file uploads
+//    (10MB each) plus 2 emails plus a DB insert per call, so the generic
+//    global limiter alone is too loose for it. ───────────────────────────────
+router.post('/submit-assessment', assessmentLimiter, assessmentUpload, submitAssessmentHandler);
 
 router.post('/coupons/validate', paymentLimiter, validateCoupon);
-router.post('/coupons/redeem', paymentLimiter, redeemCoupon);
 
 // ── Transaction logging (frontend can report client-side steps) ─────────────
 router.post('/log-event', emailLimiter, logClientEvent);

@@ -537,11 +537,13 @@ export async function getDashboard(req, res) {
             { data: assessments, error: e2 },
             { count: totalEnrollments, error: e3 },
             { count: totalAssessments, error: e4 },
+            { data: dietPlansInRangeRows, error: e6 },
+            { count: totalDietPlans, error: e7 },
         ] = await Promise.all([
 
             supabase
                 .from('enrollments')
-                .select('id, amount_paid, original_amount, coupon_savings, coupon_code, coaching_type, plan_type, duration_months, payment_status, created_at, customer_name, program_name')
+                .select('id, amount_paid, original_amount, coupon_savings, coupon_code, coaching_type, plan_type, duration_months, payment_status, created_at, customer_name, program_name, source')
                 .is('deleted_at', null)
                 .gte('created_at', since)
                 .order('created_at', { ascending: true }),
@@ -552,10 +554,15 @@ export async function getDashboard(req, res) {
                 .gte('created_at', since)
                 .order('created_at', { ascending: true }),
             supabase.from('enrollments').select('id', { count: 'exact', head: true }),
-            supabase.from('assessments').select('id', { count: 'exact', head: true })
+            supabase.from('assessments').select('id', { count: 'exact', head: true }),
+            supabase
+                .from('diet_plans')
+                .select('id, enrollment_id, created_at')
+                .gte('created_at', since),
+            supabase.from('diet_plans').select('id', { count: 'exact', head: true }),
         ]);
 
-        if (e1 || e2 || e3 || e4) throw (e1 || e2 || e3 || e4);
+        if (e1 || e2 || e3 || e4 || e6 || e7) throw (e1 || e2 || e3 || e4 || e6 || e7);
 
         // AFTER
         const { data: balanceRows, error: eBal } = await supabase
@@ -588,6 +595,23 @@ export async function getDashboard(req, res) {
         const avgOrderValue = paidEnrollments.length ? totalRevenue / paidEnrollments.length : 0;
         const couponUsageCount = paidEnrollments.filter((e) => e.coupon_code).length;
         const coupleCount = paidEnrollments.filter((e) => e.plan_type === 'couple').length;
+
+        // ── Diet plans ────────────────────────────────────────────────────────
+        const dietPlansInRange = (dietPlansInRangeRows || []).length;
+        const dietPlansLinkedInRange = (dietPlansInRangeRows || []).filter((p) => p.enrollment_id).length;
+
+        // ── Enrollment source split (manual entry vs website checkout) ──────
+        const sourceCounts = { website: 0, manual: 0 };
+        const sourceRevenue = { website: 0, manual: 0 };
+        paidEnrollments.forEach((e) => {
+            const k = e.source === 'manual' ? 'manual' : 'website';
+            sourceCounts[k] += 1;
+            sourceRevenue[k] += Number(e.amount_paid) || 0;
+        });
+        const enrollmentSourceSplit = [
+            { name: 'Website Checkout', value: sourceCounts.website, revenue: Math.round(sourceRevenue.website) },
+            { name: 'Manual Entry', value: sourceCounts.manual, revenue: Math.round(sourceRevenue.manual) },
+        ];
 
         // ── Revenue trend — bucket by day ────────────────────────────────────
         const dayMap = {};
@@ -699,6 +723,9 @@ export async function getDashboard(req, res) {
                 pendingReviewCount,
                 totalOutstandingBalance,
                 clientsWithBalance: (balanceRows || []).length,
+                dietPlansInRange,
+                dietPlansLinkedInRange,
+                totalDietPlansAllTime: totalDietPlans || 0,
             },
             charts: {
                 revenueTrend,
@@ -706,7 +733,8 @@ export async function getDashboard(req, res) {
                 planTypeSplit,
                 durationSplit,
                 assessmentStatusSplit,
-                revenueByCoachingType
+                revenueByCoachingType,
+                enrollmentSourceSplit,
             },
             recentActivity,
         });

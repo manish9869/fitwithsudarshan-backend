@@ -1,4 +1,42 @@
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
+import logger from '../config/logger.js';
+import { logTxnStep } from './txnLogService.js';
+import { incrementCouponUsage } from './couponService.js';
+
+// ── Shared "mark this enrollment paid" finalization ─────────────────────────
+// Both confirmPayment() (browser callback) and handleRazorpayWebhook() reach
+// this exact point after independently winning the "flip pending → paid"
+// race, and both need to do the same two follow-up writes: bump the
+// coupon's used_count and drop a row in the payment ledger. This used to be
+// copy-pasted in both controllers — kept here once so the two paths can't
+// drift out of sync. `source` is only used for log tagging.
+export async function finalizePaidEnrollment(row, { source } = {}) {
+    const supabase = getSupabaseAdmin();
+    const ctx = { orderId: row.razorpay_order_id, paymentId: row.razorpay_payment_id, enrollmentId: row.enrollment_id };
+
+    if (row.coupon_code) {
+        incrementCouponUsage(row.coupon_code).catch((e) => {
+            logger.error(`[${source}] ⚠️ coupon usage increment failed for ${row.coupon_code}: ${e.message}`);
+            logTxnStep({ ...ctx, step: `${source}:coupon_increment`, status: 'failed', message: e.message });
+        });
+    }
+
+    supabase.from('enrollment_payments').insert([{
+        enrollment_id: row.id,
+        amount: row.amount_paid,
+        method: 'razorpay',
+        reference: row.razorpay_payment_id,
+        paid_at: row.payment_date,
+    }]).then(({ error: ledgerErr }) => {
+        if (ledgerErr) {
+            logger.warn(`[${source}] ledger insert failed: ${ledgerErr.message}`);
+            logTxnStep({ ...ctx, step: `${source}:ledger_insert`, status: 'failed', message: ledgerErr.message });
+        }
+    }).catch((e) => {
+        logger.warn(`[${source}] ledger insert threw: ${e.message}`);
+        logTxnStep({ ...ctx, step: `${source}:ledger_insert`, status: 'failed', message: e.message });
+    });
+}
 
 export async function recordPayment({ enrollmentId, amount, method = 'other', reference, note, recordedBy, paidAt }) {
     const supabase = getSupabaseAdmin();
