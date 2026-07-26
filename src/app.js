@@ -13,6 +13,7 @@ import { requestLogger } from './middleware/requestLogger.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 import paymentRoutes from './routes/payment.js';
 import adminRoutes from './routes/admin.js';
+import contentRoutes from './routes/content.js';
 
 const app = express();
 console.log(process.env.PORT);
@@ -41,6 +42,7 @@ app.use((req, res, next) => {
 app.use(requestLogger);
 
 app.use('/api', paymentRoutes);
+app.use('/api', contentRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.use(notFound);

@@ -721,6 +721,66 @@ export const targetAudience = [
     "Anyone Seeking Sustainable Transformation",
 ];
 
+// ─── TRANSFORMATIONS (before/after gallery) ──────────────────────────────────
+export const transformations = [
+    {
+        name: "Prajvati", role: "Anesthetist", duration: "6 Months", weightLost: "24kg Lost",
+        category: "Lifestyle Transformation",
+        quote: "As an anesthetist, maintaining my own health while caring for others can be challenging. What stood out about RECODE was its focus on sustainability and lifestyle integration. It wasn't about following a strict diet — it was about building habits that fit my routine and delivered lasting results. Over 6 months, I lost 24kg while creating a healthier lifestyle that I could maintain long-term.",
+        stats: { before: "80kg", after: "56kg", bodyFat: "-24kg" },
+        photoBefore: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/prajvati-before.jpg", photoAfter: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/prajvati-after.jpg",
+    },
+    {
+        name: "Aayush", role: "Finance Professional", duration: "3 Months", weightLost: "11kg Lost",
+        category: "Fat Loss",
+        quote: "As someone working in finance, consistency was always my biggest challenge. RECODE helped me build sustainable habits around nutrition and training, leading to an 11kg transformation without extreme dieting. The process was practical, easy to follow, and fit perfectly into my busy schedule.",
+        stats: { before: "82kg", after: "71kg", bodyFat: "-11kg" },
+        photoBefore: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/aayush-before.jpg", photoAfter: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/aayush-after.jpg",
+    },
+    {
+        name: "Joshua", role: "Producer", duration: "3 Months", weightLost: "15kg Lost",
+        category: "Fat Loss",
+        quote: "As a producer, my schedule is fast-paced, stressful, and constantly changing. RECODE gave me a practical structure that fit my lifestyle instead of forcing me into a restrictive diet. Over 3 months, I lost 15kg while building habits that I could realistically maintain long-term.",
+        stats: { before: "95kg", after: "80kg", bodyFat: "-15kg" },
+        photoBefore: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/joshua-before.jpg", photoAfter: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/joshua-after.jpg",
+    },
+    {
+        name: "Raj", role: "Actor", duration: "3 Months", weightLost: "15kg Lost",
+        category: "Transformation",
+        quote: "As an actor, staying camera-ready is part of the profession. RECODE gave me a structured and sustainable approach to nutrition and training that fit my schedule. In just 3 months, I transformed from 85kg to 70kg while improving my energy, confidence, and overall physique.",
+        stats: { before: "85kg", after: "70kg", bodyFat: "-15kg" },
+        photoBefore: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/raj-before.jpg", photoAfter: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/raj-after.jpg",
+    },
+    {
+        name: "Jinal", role: "Working Professional", duration: "3 Months", weightLost: "8kg Lost",
+        category: "Fat Loss",
+        quote: "I had already tried many trainers and diets before, but nothing was working properly for me. With RECODE, I finally understood how to follow fitness in a structured and sustainable way. The plan was simple, practical, and easy to follow with my lifestyle. In 3 months, I went from 65kg to 58kg and lost 8kg. For the first time, I felt like I was not just dieting — I was actually building a better routine.",
+        stats: { before: "65kg", after: "58kg", bodyFat: "-8kg" },
+        photoBefore: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/jinal-before.jpg", photoAfter: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/jinal-after.jpg",
+    },
+    {
+        name: "Juzer", role: "Business Professional", duration: "3 Months", weightLost: "10kg Lost",
+        category: "Transformation",
+        quote: "My biggest struggle was consistency. Because of travelling and work, maintaining diet and workouts was always difficult for me. I was not able to lose weight properly before. With RECODE, things became more structured and manageable. I lost 10kg in 3 months, and the process felt practical even with my lifestyle.",
+        stats: { before: "85kg", after: "75kg", bodyFat: "-10kg" },
+        photoBefore: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/juzer-before.jpg", photoAfter: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/juzer-after.jpg",
+    },
+    {
+        name: "Lalitesh", role: "Business Owner", duration: "2 Months", weightLost: "7kg Lost",
+        category: "Body Recomposition",
+        quote: "As a business owner, my schedule was always packed. I wanted to improve my physique and get a sharper body, but I could never stay consistent with diet and training. RECODE made the process simple for me. It gave me structure, accountability, and a plan that actually fit my lifestyle. This is the first time fitness did not feel forced or complicated. In just 2 months, I lost 7kg and gained lean muscle.",
+        stats: { before: "87kg", after: "80kg", bodyFat: "-7kg" },
+        photoBefore: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/lalitesh-before.jpg", photoAfter: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/lalitesh-after.jpg",
+    },
+    {
+        name: "Sudarshan Chavan", role: "Founder, RECODE™", duration: "4 Months", weightLost: "29kg Lost",
+        category: "Founder's Journey",
+        quote: "RECODE was born from my own transformation journey. After struggling with inconsistency, extreme approaches, and the cycle of starting over, I realized that lasting results come from structure, not restriction. I transformed from 85kg to 56kg and built a lifestyle I could actually sustain.",
+        stats: { before: "85kg", after: "56kg", bodyFat: "-29kg" },
+        photoBefore: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/sudarshan-before.png", photoAfter: "https://cpuwyduadrpmbgdissca.supabase.co/storage/v1/object/public/media/transformations/sudarshan-after.jpeg",
+    },
+];
+
 // ─── WHY RECODE ───────────────────────────────────────────────────────────────
 export const whyRecode = {
     others: [

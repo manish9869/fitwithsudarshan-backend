@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import multer from 'multer';
 import { requireAdminAuth } from '../middleware/adminAuth.js';
+import { uploadImage } from '../controllers/uploadController.js';
 import { adminLogin, adminMe, adminChangePassword } from '../controllers/adminAuthController.js';
 import {
     listEnrollments,
@@ -45,6 +47,11 @@ import {
 } from '../controllers/adminContentController.js';
 
 const router = Router();
+
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -118,5 +125,7 @@ router.get('/content/:table', listTable);
 router.post('/content/:table', createTableRow);
 router.patch('/content/:table/:id', updateTableRow);
 router.delete('/content/:table/:id', deleteTableRow);
+
+router.post('/upload', upload.single('file'), uploadImage);
 
 export default router;
