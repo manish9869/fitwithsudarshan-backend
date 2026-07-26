@@ -22,7 +22,6 @@ export function getContentVersion() {
 export const ALLOWED_TABLES = [
     'coaching_types',
     'durations',
-    'services',
     'recode_method',
     'testimonials',
     'blog_posts',
@@ -350,7 +349,6 @@ export async function getPublicContent() {
         durationsRows,
         pricingRows,
         basicConsultation,
-        services,
         recodeMethod,
         testimonials,
         blogPosts,
@@ -378,7 +376,6 @@ export async function getPublicContent() {
         listRows('durations'),
         getPricingRows(),
         getBasicConsultation(),
-        listRows('services'),
         listRows('recode_method'),
         listRows('testimonials'),
         listRows('blog_posts'),
@@ -439,10 +436,6 @@ export async function getPublicContent() {
         pricingTable: pricingTableMapped,
 
         basicConsultation: mapBasicConsultation(basicConsultation, pricingTableMapped, saleFlagsMapped),
-
-        services: services
-            .filter((s) => s.active)
-            .map(mapService),
 
         recodeMethod: recodeMethod.map(mapRecodeMethod),
 
@@ -533,18 +526,6 @@ function mapBasicConsultation(r, pricingTable, saleFlags) {
         originalPriceCouple: saleFlags[coupleKey]?.onSale ? Number(saleFlags[coupleKey].originalPrice) || null : null,
         saleLabel: r.sale_label,
         features: r.features || [],
-    };
-}
-
-function mapService(r) {
-    return {
-        id: r.id,
-        title: r.title,
-        subtitle: r.subtitle,
-        features: r.features || [],
-        badge: r.badge,
-        color: r.color,
-        accent: r.accent,
     };
 }
 
