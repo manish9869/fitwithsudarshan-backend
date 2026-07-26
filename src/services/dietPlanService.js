@@ -24,10 +24,28 @@ export async function listDietPlans() {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
         .from('diet_plans')
-        .select('id, client_name, goal, diet_preference, plan_duration, status, created_at, updated_at')
+        .select('id, enrollment_id, client_name, goal, diet_preference, plan_duration, status, created_at, updated_at')
         .order('updated_at', { ascending: false });
     if (error) throw error;
     return data || [];
+}
+
+// Used by the Enrollment detail drawer / row action to find (and show) the
+// one plan already linked to this enrollment, if any — enrollment_id is not
+// unique-constrained (nothing stops two plans pointing at the same
+// enrollment), so this deliberately returns the most recently updated one.
+export async function getDietPlanByEnrollmentId(enrollmentId) {
+    const supabase = getSupabaseAdmin();
+    const { data: row, error } = await supabase
+        .from('diet_plans')
+        .select('id')
+        .eq('enrollment_id', enrollmentId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (error) throw error;
+    if (!row) return null;
+    return getDietPlanWithDays(row.id);
 }
 
 export async function getDietPlanWithDays(id) {

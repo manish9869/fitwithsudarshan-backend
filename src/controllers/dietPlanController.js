@@ -1,7 +1,7 @@
 // src/controllers/dietPlanController.js
 import {
     listDietPlans, getDietPlanWithDays, createDietPlan, updateDietPlan,
-    deleteDietPlan, replaceDietPlanDays,
+    deleteDietPlan, replaceDietPlanDays, getDietPlanByEnrollmentId,
 } from '../services/dietPlanService.js';
 import logger from '../config/logger.js';
 
@@ -11,6 +11,16 @@ export async function adminListDietPlans(req, res) {
     } catch (err) {
         logger.error(`[admin] listDietPlans failed: ${err.message}`);
         return res.status(500).json({ error: 'Failed to load diet plans.' });
+    }
+}
+
+export async function adminGetDietPlanByEnrollment(req, res) {
+    try {
+        const plan = await getDietPlanByEnrollmentId(req.params.enrollmentId);
+        return res.json({ plan: plan || null });
+    } catch (err) {
+        logger.error(`[admin] getDietPlanByEnrollment failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to check diet plan.' });
     }
 }
 

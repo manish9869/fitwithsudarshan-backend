@@ -24,6 +24,7 @@ import {
 } from '../controllers/couponController.js';
 import {
     adminListDietPlans, adminGetDietPlan, adminCreateDietPlan, adminUpdateDietPlan, adminDeleteDietPlan,
+    adminGetDietPlanByEnrollment,
 } from '../controllers/dietPlanController.js';
 import {
     createManualEnrollment,
@@ -99,6 +100,7 @@ router.delete('/coupons/:id', adminDeleteCoupon);
 
 router.get('/diet-plans', adminListDietPlans);
 router.post('/diet-plans', adminCreateDietPlan);
+router.get('/diet-plans/by-enrollment/:enrollmentId', adminGetDietPlanByEnrollment);
 router.get('/diet-plans/:id', adminGetDietPlan);
 router.patch('/diet-plans/:id', adminUpdateDietPlan);
 router.delete('/diet-plans/:id', adminDeleteDietPlan);
