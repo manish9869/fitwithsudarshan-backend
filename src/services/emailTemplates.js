@@ -64,6 +64,16 @@ function fmtDate(iso) {
     }).format(d);
 }
 
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function inject(html, data) {
     html = html.replace(/\{\{#if (\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_, key, block) => {
         const elseSplit = block.match(/^([\s\S]*?)\{\{else\}\}([\s\S]*)$/);
@@ -78,7 +88,7 @@ function inject(html, data) {
         const val = data[key];
         if (val === undefined || val === null) return '—';
         if (typeof val === 'boolean') return val ? 'Yes' : 'No';
-        return String(val);
+        return escapeHtml(val);
     });
 
     return html;

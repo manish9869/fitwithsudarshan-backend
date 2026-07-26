@@ -96,6 +96,7 @@ export async function getEnrollment(req, res) {
             .from('enrollments')
             .select('*')
             .eq('id', req.params.id)
+            .is('deleted_at', null)
             .single();
 
         if (error || !data) return res.status(404).json({ error: 'Enrollment not found.' });
@@ -143,7 +144,7 @@ export async function exportEnrollments(req, res) {
         const supabase = getSupabaseAdmin();
         const { search = '', coachingType = 'all', planType = 'all', status = 'all' } = req.query;
 
-        let query = supabase.from('enrollments').select('*');
+        let query = supabase.from('enrollments').select('*').is('deleted_at', null);
         if (search.trim()) {
             const s = search.trim().replace(/[%,]/g, '');
             query = query.or(
@@ -309,7 +310,7 @@ export async function exportAssessments(req, res) {
         const supabase = getSupabaseAdmin();
         const { search = '', status = 'all', plan = 'all', dateFrom, dateTo } = req.query;
 
-        let query = supabase.from('assessments').select('*');
+        let query = supabase.from('assessments').select('*').is('deleted_at', null);
         if (search.trim()) {
             const s = search.trim().replace(/[%,]/g, '');
             query = query.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,whatsapp.ilike.%${s}%,email.ilike.%${s}%`);
@@ -351,6 +352,7 @@ export async function getFunnelAudit(req, res) {
         const { data: paidRows, error: e3 } = await supabase
             .from('enrollments')
             .select('id, enrollment_id, customer_name, customer_email, amount_paid, razorpay_order_id, created_at')
+            .is('deleted_at', null)
             .eq('payment_status', 'paid')
             .gte('created_at', since);
 
@@ -536,14 +538,17 @@ export async function getDashboard(req, res) {
             { count: totalEnrollments, error: e3 },
             { count: totalAssessments, error: e4 },
         ] = await Promise.all([
+
             supabase
                 .from('enrollments')
                 .select('id, amount_paid, original_amount, coupon_savings, coupon_code, coaching_type, plan_type, duration_months, payment_status, created_at, customer_name, program_name')
+                .is('deleted_at', null)
                 .gte('created_at', since)
                 .order('created_at', { ascending: true }),
             supabase
                 .from('assessments')
                 .select('id, status, plan, commitment, reviewed, created_at, first_name, last_name')
+                .is('deleted_at', null)
                 .gte('created_at', since)
                 .order('created_at', { ascending: true }),
             supabase.from('enrollments').select('id', { count: 'exact', head: true }),
@@ -552,9 +557,11 @@ export async function getDashboard(req, res) {
 
         if (e1 || e2 || e3 || e4) throw (e1 || e2 || e3 || e4);
 
+        // AFTER
         const { data: balanceRows, error: eBal } = await supabase
             .from('enrollments')
             .select('balance_due')
+            .is('deleted_at', null)
             .gt('balance_due', 0);
 
         if (eBal) throw eBal;
@@ -564,9 +571,11 @@ export async function getDashboard(req, res) {
             0
         );
 
+
         const { count: followUpsDue, error: e5 } = await supabase
             .from('enrollments')
             .select('id', { count: 'exact', head: true })
+            .is('deleted_at', null)
             .eq('followup_status', 'active')
             .eq('payment_status', 'paid')
             .lte('next_followup_at', new Date().toISOString());

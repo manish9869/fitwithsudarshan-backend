@@ -247,6 +247,7 @@ export async function searchEnrollmentsByContact(req, res) {
         const { data, error } = await supabase
             .from('enrollments')
             .select('*')
+            .is('deleted_at', null)
             .or(`customer_name.ilike.%${s}%,customer_email.ilike.%${s}%,customer_phone.ilike.%${s}%,enrollment_id.ilike.%${s}%`)
             .order('created_at', { ascending: false })
             .limit(20);
@@ -520,6 +521,7 @@ export async function listFollowUps(req, res) {
         let query = supabase
             .from('enrollments')
             .select('*', { count: 'exact' })
+            .is('deleted_at', null)
             .eq('followup_status', 'active')
             .eq('payment_status', 'paid')
             .not('next_followup_at', 'is', null);
@@ -550,6 +552,7 @@ export async function followUpsDueCount(req, res) {
         const { count, error } = await supabase
             .from('enrollments')
             .select('id', { count: 'exact', head: true })
+            .is('deleted_at', null)
             .eq('followup_status', 'active')
             .eq('payment_status', 'paid')
             .lte('next_followup_at', new Date().toISOString());

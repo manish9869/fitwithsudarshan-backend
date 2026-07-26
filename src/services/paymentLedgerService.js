@@ -131,11 +131,13 @@ export async function getPaymentsForEnrollment(enrollmentId) {
     return data || [];
 }
 
+
 export async function listOutstandingBalances({ dueOnly = false } = {}) {
     const supabase = getSupabaseAdmin();
     let query = supabase
         .from('enrollments')
         .select('*')
+        .is('deleted_at', null)
         .gt('balance_due', 0)
         .order('next_payment_reminder_at', { ascending: true });
 
