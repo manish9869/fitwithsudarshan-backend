@@ -149,15 +149,3 @@ export async function listOutstandingBalances({ dueOnly = false } = {}) {
     return data || [];
 }
 
-// ── NEW: delete an enrollment and its full payment ledger (FK-safe order).
-export async function deleteEnrollmentWithPayments(enrollmentId) {
-    const supabase = getSupabaseAdmin();
-    const { error: payErr } = await supabase.from('enrollment_payments').delete().eq('enrollment_id', enrollmentId);
-    if (payErr) throw new Error(`Failed to delete payment history: ${payErr.message}`);
-
-    // Best-effort cleanup of any admin note attached to this record.
-    await supabase.from('admin_notes').delete().eq('record_type', 'enrollment').eq('record_id', enrollmentId);
-
-    const { error } = await supabase.from('enrollments').delete().eq('id', enrollmentId);
-    if (error) throw new Error(`Failed to delete enrollment: ${error.message}`);
-}

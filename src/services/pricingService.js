@@ -1,5 +1,4 @@
 // src/services/pricingService.js
-// Replaces src/data/serverPricing.js entirely — delete that file.
 // This is the ONLY price the server trusts; it never comes from the client.
 //
 // Deliberately UNCACHED. This used to keep its own 30s in-memory cache,

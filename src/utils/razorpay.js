@@ -20,17 +20,7 @@ export async function createRazorpayOrder({ amount, currency = 'INR', receipt, n
     return data;
 }
 
-// NEW — needed to cross-check what was actually charged
-export async function fetchRazorpayOrder(orderId) {
-    const response = await fetch(`https://api.razorpay.com/v1/orders/${orderId}`, {
-        headers: { Authorization: authHeader() },
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data?.error?.description || 'Failed to fetch order');
-    return data;
-}
-
-// NEW — confirms the payment is actually captured, and for how much
+// Confirms the payment is actually captured, and for how much
 export async function fetchRazorpayPayment(paymentId) {
     const response = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
         headers: { Authorization: authHeader() },
