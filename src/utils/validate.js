@@ -7,12 +7,12 @@ const VALID_DURATIONS = ['1', '3', '6', '12'];
 // NOTE: /api/create-order no longer accepts `amount` from the client — the
 // server resolves the real price itself via resolvePrice() to prevent price
 // tampering. Validate the plan-selection fields instead.
-export function validateCreateOrder(body) {
+export function validateCreateOrder(body, validCoachingTypes) {
     const errors = [];
     const { coachingType, planType, durationMonths, customerName, customerEmail } = body;
 
-    if (!coachingType || !VALID_COACHING_TYPES.includes(coachingType)) {
-        errors.push(`coachingType must be one of: ${VALID_COACHING_TYPES.join(', ')}`);
+    if (!coachingType || !validCoachingTypes.includes(coachingType)) {
+        errors.push(`coachingType must be one of: ${validCoachingTypes.join(', ')}`);
     }
     if (!planType || !VALID_PLAN_TYPES.includes(planType)) {
         errors.push(`planType must be one of: ${VALID_PLAN_TYPES.join(', ')}`);

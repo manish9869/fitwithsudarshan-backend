@@ -1,6 +1,6 @@
 import { createRazorpayOrder, verifyPaymentSignature, fetchRazorpayPayment } from '../utils/razorpay.js';
 import { validateVerifyPayment, validateCreateOrder } from '../utils/validate.js';
-import { resolvePrice } from '../data/serverPricing.js';
+import { resolvePrice, getValidCoachingTypeIds } from '../services/pricingService.js';
 import { validateCouponCode, incrementCouponUsage } from '../services/couponService.js';
 import { renderTemplate } from '../services/emailTemplates.js';
 import { getTransporter } from './emailController.js';
@@ -28,7 +28,8 @@ export async function createOrder(req, res, next) {
     try {
         logTxnStep({ step: 'create_order', status: 'started', metadata: { coachingType, planType, durationMonths } });
 
-        const errors = validateCreateOrder(req.body);
+        const validCoachingTypes = await getValidCoachingTypeIds();
+        const errors = validateCreateOrder(req.body, validCoachingTypes);
         if (errors.length) {
             logTxnStep({ step: 'create_order:validate', status: 'failed', message: errors.join(', ') });
             return res.status(400).json({ error: errors.join(', ') });

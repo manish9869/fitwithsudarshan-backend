@@ -36,6 +36,14 @@ import {
 } from '../controllers/manualEnrollmentController.js';
 import { getTxnTimelineHandler } from '../controllers/logController.js';
 
+
+import {
+    listTable, createTableRow, updateTableRow, deleteTableRow,
+    getSiteKey, putSiteKey,
+    getBasicConsultationHandler, putBasicConsultationHandler,
+    getPricingHandler, putPricingHandler, deletePricingHandler,
+} from '../controllers/adminContentController.js';
+
 const router = Router();
 
 const loginLimiter = rateLimit({
@@ -95,5 +103,20 @@ router.get('/follow-ups/count', followUpsDueCount);
 router.post('/enrollments/:id/followup', markFollowUp);
 
 router.get('/txn-timeline', getTxnTimelineHandler);
+
+router.get('/content/site/:key', getSiteKey);
+router.put('/content/site/:key', putSiteKey);
+
+router.get('/content/basic-consultation', getBasicConsultationHandler);
+router.put('/content/basic-consultation', putBasicConsultationHandler);
+
+router.get('/content/pricing', getPricingHandler);
+router.put('/content/pricing', putPricingHandler);
+router.delete('/content/pricing/:id', deletePricingHandler);
+
+router.get('/content/:table', listTable);
+router.post('/content/:table', createTableRow);
+router.patch('/content/:table/:id', updateTableRow);
+router.delete('/content/:table/:id', deleteTableRow);
 
 export default router;
