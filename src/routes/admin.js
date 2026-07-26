@@ -40,6 +40,7 @@ import {
     listBalanceDue,
     sendBalanceReminder,
     sendPaymentReceiptEmail, deleteManualEnrollment,
+    downloadEnrollmentInvoice, downloadEnrollmentPaymentReceipt,
 } from '../controllers/manualEnrollmentController.js';
 import { getTxnTimelineHandler } from '../controllers/logController.js';
 
@@ -117,6 +118,8 @@ router.post('/enrollments/:id/send-email', sendEnrollmentEmail);
 router.get('/enrollments/:id/payments', getEnrollmentPayments);
 router.post('/enrollments/:id/payments', addEnrollmentPayment);
 router.post('/enrollments/:id/payments/:paymentId/send-receipt', sendPaymentReceiptEmail);
+router.get('/enrollments/:id/invoice', downloadEnrollmentInvoice);
+router.get('/enrollments/:id/payments/:paymentId/receipt', downloadEnrollmentPaymentReceipt);
 router.get('/balance-due', listBalanceDue);
 router.post('/enrollments/:id/send-balance-reminder', sendBalanceReminder);
 

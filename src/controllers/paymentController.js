@@ -1,7 +1,7 @@
 import { createRazorpayOrder, verifyPaymentSignature, fetchRazorpayPayment } from '../utils/razorpay.js';
 import { validateVerifyPayment, validateCreateOrder } from '../utils/validate.js';
 import { resolvePrice, getValidCoachingTypeIds } from '../services/pricingService.js';
-import { validateCouponCode, incrementCouponUsage } from '../services/couponService.js';
+import { validateCouponCode } from '../services/couponService.js';
 import { renderTemplate } from '../services/emailTemplates.js';
 import { getTransporter } from './emailController.js';
 import { generateInvoiceBuffer } from '../services/invoiceService.js';
@@ -11,8 +11,8 @@ import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { logTxnStep } from '../services/txnLogService.js';
 import { generateEnrollmentId } from '../utils/enrollmentId.js';
 import { waitUntil } from '@vercel/functions';
-import { generatePaymentReceiptBuffer } from '../services/paymentReceiptService.js';
 import { toTitleCase } from '../utils/textFormat.js';
+import { finalizePaidEnrollment } from '../services/paymentLedgerService.js';
 // ── POST /api/create-order ────────────────────────────────────────────────
 // Client no longer sends `amount` — the server resolves the real price and
 // validates any coupon. This is what stops price tampering: the client
@@ -37,7 +37,7 @@ export async function createOrder(req, res, next) {
 
         let amountRupees;
         try {
-            amountRupees = resolvePrice({ coachingType, planType, durationMonths });
+            amountRupees = await resolvePrice({ coachingType, planType, durationMonths });
         } catch (e) {
             return res.status(400).json({ error: e.message });
         }
@@ -199,36 +199,14 @@ export async function confirmPayment(req, res, next) {
         logger.info(`[confirm-payment] ✅ CONFIRMED — ${data.enrollment_id}`);
         logTxnStep({ orderId: oid, paymentId: pid, enrollmentId: data.enrollment_id, step: 'confirm_payment:db_update', status: 'success' });
 
-        // Coupon usage is tracked here, right after the DB write succeeds —
-        // deliberately NOT inside sendEnrollmentConfirmation(), so a missing
-        // email config (or an email failure) can never silently skip
-        // recording that a coupon was used on a real, paid enrollment.
-        if (data.coupon_code) {
-            incrementCouponUsage(data.coupon_code).catch((e) => {
-                logger.error(`[confirm-payment] ⚠️ coupon usage increment failed for ${data.coupon_code}: ${e.message}`);
-                logTxnStep({ orderId: oid, paymentId: pid, enrollmentId: data.enrollment_id, step: 'confirm_payment:coupon_increment', status: 'failed', message: e.message });
-            });
-        }
+        // Coupon usage + payment ledger — shared with the webhook path via
+        // finalizePaidEnrollment() so the two can't drift out of sync. Fired
+        // here, right after the DB write succeeds, deliberately NOT inside
+        // sendEnrollmentConfirmation(), so a missing email config (or an
+        // email failure) can never silently skip recording a real payment.
+        finalizePaidEnrollment(data, { source: 'confirm_payment' });
 
         // Respond immediately — email/PDF happen after
-
-        supabase.from('enrollment_payments').insert([{
-            enrollment_id: data.id,
-            amount: data.amount_paid,
-            method: 'razorpay',
-            reference: data.razorpay_payment_id,
-            paid_at: data.payment_date,
-        }]).then(({ error: ledgerErr }) => {
-            if (ledgerErr) {
-                logger.warn(`[confirm-payment] ledger insert failed: ${ledgerErr.message}`);
-                logTxnStep({ orderId: oid, paymentId: pid, enrollmentId: data.enrollment_id, step: 'confirm_payment:ledger_insert', status: 'failed', message: ledgerErr.message });
-            }
-        }).catch((e) => {
-            logger.warn(`[confirm-payment] ledger insert threw: ${e.message}`);
-            logTxnStep({ orderId: oid, paymentId: pid, enrollmentId: data.enrollment_id, step: 'confirm_payment:ledger_insert', status: 'failed', message: e.message });
-        });
-
-
         res.status(201).json({ success: true, enrollment: data });
 
         waitUntil(sendEnrollmentConfirmation(data).catch((e) => {
@@ -349,37 +327,37 @@ export function healthCheck(_req, res) {
     res.json({ status: 'ok', env: process.env.NODE_ENV, timestamp: new Date().toISOString() });
 }
 
+// No customer login exists on this site (direct checkout, no accounts), so
+// this can't be gated behind a session. Instead it's gated behind a fact
+// only the real payer knows: the enrollment_id + razorpay_payment_id PAIR,
+// both only ever handed to the browser in the confirm-payment response
+// right after a real, captured payment. Neither value alone is guessable
+// (razorpay_payment_id is an opaque Razorpay-generated token), and the PDF
+// is always built from the DB row — never from client-supplied fields — so
+// a caller can no longer invent an arbitrary name/amount/date and get an
+// official-looking invoice out of this endpoint.
 export async function downloadInvoice(req, res, next) {
     try {
-        const enrollment = req.body;
-        if (!enrollment?.enrollmentId && !enrollment?.enrollment_id) {
-            return res.status(400).json({ error: 'Invalid enrollment data.' });
+        const { enrollmentId, razorpayPaymentId } = req.body || {};
+        if (!enrollmentId || !razorpayPaymentId) {
+            return res.status(400).json({ error: 'enrollmentId and razorpayPaymentId are required.' });
         }
-        const buffer = await generateInvoiceBuffer(enrollment);
-        const invoiceId = enrollment.enrollmentId || enrollment.enrollment_id;
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="RECODE-Invoice-${invoiceId}.pdf"`);
-        res.setHeader('Content-Length', buffer.length);
-        return res.send(buffer);
-    } catch (err) {
-        next(err);
-    }
-}
 
-// ── POST /api/payment-receipt ─────────────────────────────────────────────
-// Stateless, mirrors /api/invoice — the caller (admin panel) already has the
-// enrollment + payment data loaded, so no DB lookup is needed here.
-// Body: { enrollment, payment, paidToDate }
-export async function downloadPaymentReceipt(req, res, next) {
-    try {
-        const { enrollment, payment, paidToDate } = req.body || {};
-        if (!enrollment || !payment || payment.amount == null) {
-            return res.status(400).json({ error: 'Invalid receipt data.' });
-        }
-        const buffer = await generatePaymentReceiptBuffer(enrollment, payment, paidToDate);
-        const invoiceId = enrollment.enrollmentId || enrollment.enrollment_id || 'receipt';
+        const supabase = getSupabaseAdmin();
+        const { data: enrollment, error } = await supabase
+            .from('enrollments')
+            .select('*')
+            .eq('enrollment_id', enrollmentId)
+            .eq('razorpay_payment_id', razorpayPaymentId)
+            .is('deleted_at', null)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!enrollment) return res.status(404).json({ error: 'No matching paid enrollment found.' });
+
+        const buffer = await generateInvoiceBuffer(enrollment);
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="RECODE-Receipt-${invoiceId}.pdf"`);
+        res.setHeader('Content-Disposition', `attachment; filename="RECODE-Invoice-${enrollment.enrollment_id}.pdf"`);
         res.setHeader('Content-Length', buffer.length);
         return res.send(buffer);
     } catch (err) {

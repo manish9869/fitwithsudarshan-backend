@@ -14,8 +14,25 @@ const MAX_PDF_BYTES = 20 * 1024 * 1024; // 20MB safety cap
 export const DEFAULT_RESOURCE_VAULT_PDF_URL =
     'https://vducmiggraxtqdgt.public.blob.vercel-storage.com/RECODE%E2%84%A2%20COMEBACK%20BLUEPRINT.pdf';
 
+// Hosts this server is allowed to fetch PDFs from. `fetchPdfAttachment` does
+// a raw fetch() with no other restriction, so an unrestricted `url` (e.g. an
+// admin-editable pdfUrl override) would let the caller make this server
+// fetch arbitrary internal/external URLs (SSRF) and have the response
+// emailed out as an attachment. Only the storage host this app actually
+// uses is allowed; anything else is rejected rather than fetched.
+const ALLOWED_PDF_HOSTS = ['vducmiggraxtqdgt.public.blob.vercel-storage.com'];
+
+export function isAllowedPdfUrl(url) {
+    try {
+        const parsed = new URL(url);
+        return parsed.protocol === 'https:' && ALLOWED_PDF_HOSTS.includes(parsed.hostname);
+    } catch {
+        return false;
+    }
+}
+
 export async function fetchPdfAttachment(url, filename = 'RECODE-Comeback-Blueprint.pdf') {
-    if (!url) return null;
+    if (!url || !isAllowedPdfUrl(url)) return null;
 
     try {
         const res = await fetch(url);

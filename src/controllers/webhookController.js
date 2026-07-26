@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { waitUntil } from '@vercel/functions';
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { logTxnStep } from '../services/txnLogService.js';
-import { incrementCouponUsage } from '../services/couponService.js';
+import { finalizePaidEnrollment } from '../services/paymentLedgerService.js';
 import { sendEnrollmentConfirmation } from './paymentController.js';
 import logger from '../config/logger.js';
 
@@ -74,37 +74,12 @@ export async function handleRazorpayWebhook(req, res) {
         logger.info(`[webhook] ✅ CONFIRMED — ${data.enrollment_id}`);
         await logTxnStep({ orderId, paymentId, enrollmentId: data.enrollment_id, step: 'webhook:db_update', status: 'success' });
 
-        // ── Coupon usage — mirrors confirmPayment(). The webhook can be the
-        // path that actually wins the "pending → paid" race (browser tab
-        // closed right after paying, slow client network, etc). Without this
-        // the coupon's used_count silently under-counts, letting a
-        // max-uses-limited coupon get redeemed more times than intended.
-        if (data.coupon_code) {
-            incrementCouponUsage(data.coupon_code).catch((e) => {
-                logger.error(`[webhook] ⚠️ coupon usage increment failed for ${data.coupon_code}: ${e.message}`);
-                logTxnStep({ orderId, paymentId, enrollmentId: data.enrollment_id, step: 'webhook:coupon_increment', status: 'failed', message: e.message });
-            });
-        }
-
-        // ── Payment ledger — the single source of truth PaymentLedgerPanel
-        // reads from. A failed insert here used to be invisible (enrollment
-        // shows "paid" but the ledger shows zero payments) — now it's logged
-        // to transaction_logs so it surfaces in Funnel Audit / txn-timeline.
-        supabase.from('enrollment_payments').insert([{
-            enrollment_id: data.id,
-            amount: data.amount_paid,
-            method: 'razorpay',
-            reference: data.razorpay_payment_id,
-            paid_at: data.payment_date,
-        }]).then(({ error: ledgerErr }) => {
-            if (ledgerErr) {
-                logger.warn(`[webhook] ledger insert failed: ${ledgerErr.message}`);
-                logTxnStep({ orderId, paymentId, enrollmentId: data.enrollment_id, step: 'webhook:ledger_insert', status: 'failed', message: ledgerErr.message });
-            }
-        }).catch((e) => {
-            logger.warn(`[webhook] ledger insert threw: ${e.message}`);
-            logTxnStep({ orderId, paymentId, enrollmentId: data.enrollment_id, step: 'webhook:ledger_insert', status: 'failed', message: e.message });
-        });
+        // ── Coupon usage + payment ledger — shared with confirmPayment() via
+        // finalizePaidEnrollment(). The webhook can be the path that
+        // actually wins the "pending → paid" race (browser tab closed right
+        // after paying, slow client network, etc), so it needs the exact
+        // same follow-up writes confirmPayment() does.
+        finalizePaidEnrollment(data, { source: 'webhook' });
 
         res.status(200).json({ received: true });
 

@@ -1,5 +1,5 @@
 import {
-    validateCouponCode, incrementCouponUsage,
+    validateCouponCode,
     listCoupons, createCoupon, updateCoupon, deleteCoupon,
 } from '../services/couponService.js';
 import logger from '../config/logger.js';
@@ -19,17 +19,12 @@ export async function validateCoupon(req, res) {
     }
 }
 
-// ── PUBLIC: POST /api/coupons/redeem (fire-and-forget after successful payment) ──
-export async function redeemCoupon(req, res) {
-    try {
-        const { code } = req.body || {};
-        if (code) await incrementCouponUsage(code);
-        return res.json({ success: true });
-    } catch (err) {
-        logger.error(`[coupon] redeem failed: ${err.message}`);
-        return res.status(200).json({ success: false }); // non-blocking, never fail the client
-    }
-}
+// NOTE: coupon redemption (incrementing used_count) happens server-side
+// inside confirmPayment() / the Razorpay webhook via finalizePaidEnrollment()
+// — never from a client-triggered call — so a coupon's usage limit can't be
+// exhausted by anyone just guessing/spamming a code without ever paying.
+// A public POST /api/coupons/redeem endpoint used to exist for this but had
+// no caller and no verification that a payment occurred; it was removed.
 
 // ── ADMIN: /api/admin/coupons ───────────────────────────────────────────────
 export async function adminListCoupons(req, res) {

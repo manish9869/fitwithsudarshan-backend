@@ -13,6 +13,7 @@ import { config } from '../config/env.js';
 import logger from '../config/logger.js';
 import { fetchPdfAttachment, DEFAULT_RESOURCE_VAULT_PDF_URL } from '../services/pdfAttachmentService.js';
 import { generatePaymentReceiptBuffer } from '../services/paymentReceiptService.js';
+import { generateInvoiceBuffer } from '../services/invoiceService.js';
 import { toTitleCase } from '../utils/textFormat.js';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -422,6 +423,81 @@ export async function sendPaymentReceiptEmail(req, res) {
     } catch (err) {
         logger.error(`[admin] sendPaymentReceiptEmail failed: ${err.message}`);
         return res.status(500).json({ error: 'Failed to send receipt email.' });
+    }
+}
+
+// ── Shared loader for the two payment-receipt endpoints above/below: fetches
+// the enrollment + the one payment row + the chronological running total
+// paid up to (and including) it. Pulled out so download + email can't drift.
+async function loadPaymentReceiptContext(enrollmentId, paymentId) {
+    const supabase = getSupabaseAdmin();
+
+    const { data: enrollment, error: eErr } = await supabase
+        .from('enrollments').select('*').eq('id', enrollmentId).single();
+    if (eErr || !enrollment) return { error: 'Enrollment not found.', status: 404 };
+
+    const { data: payment, error: pErr } = await supabase
+        .from('enrollment_payments')
+        .select('*')
+        .eq('id', paymentId)
+        .eq('enrollment_id', enrollmentId)
+        .single();
+    if (pErr || !payment) return { error: 'Payment not found.', status: 404 };
+
+    const { data: allPayments, error: apErr } = await supabase
+        .from('enrollment_payments')
+        .select('id, amount, paid_at')
+        .eq('enrollment_id', enrollmentId)
+        .order('paid_at', { ascending: true });
+    if (apErr) throw apErr;
+
+    const idx = (allPayments || []).findIndex((p) => p.id === payment.id);
+    const paidToDate = (allPayments || [])
+        .slice(0, idx === -1 ? allPayments.length : idx + 1)
+        .reduce((s, p) => s + Number(p.amount || 0), 0);
+
+    return { enrollment, payment, paidToDate };
+}
+
+// ── GET /api/admin/enrollments/:id/invoice ────────────────────────────────
+// Admin-only PDF download — trusted context, so (unlike the public
+// POST /api/invoice used right after a website checkout) this can just look
+// the enrollment up by its real DB id instead of needing a second identifier
+// to prove the caller is the payer. Works for manual enrollments too, which
+// have no razorpay_payment_id for the public route to key off of.
+export async function downloadEnrollmentInvoice(req, res) {
+    try {
+        const supabase = getSupabaseAdmin();
+        const { data: enrollment, error } = await supabase
+            .from('enrollments').select('*').eq('id', req.params.id).single();
+        if (error || !enrollment) return res.status(404).json({ error: 'Enrollment not found.' });
+
+        const buffer = await generateInvoiceBuffer(enrollment);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="RECODE-Invoice-${enrollment.enrollment_id}.pdf"`);
+        res.setHeader('Content-Length', buffer.length);
+        return res.send(buffer);
+    } catch (err) {
+        logger.error(`[admin] downloadEnrollmentInvoice failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to generate invoice.' });
+    }
+}
+
+// ── GET /api/admin/enrollments/:id/payments/:paymentId/receipt ───────────
+// Admin-only PDF download counterpart to sendPaymentReceiptEmail above.
+export async function downloadEnrollmentPaymentReceipt(req, res) {
+    try {
+        const ctx = await loadPaymentReceiptContext(req.params.id, req.params.paymentId);
+        if (ctx.error) return res.status(ctx.status).json({ error: ctx.error });
+
+        const buffer = await generatePaymentReceiptBuffer(ctx.enrollment, ctx.payment, ctx.paidToDate);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="RECODE-Receipt-${ctx.enrollment.enrollment_id}.pdf"`);
+        res.setHeader('Content-Length', buffer.length);
+        return res.send(buffer);
+    } catch (err) {
+        logger.error(`[admin] downloadEnrollmentPaymentReceipt failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to generate receipt.' });
     }
 }
 
