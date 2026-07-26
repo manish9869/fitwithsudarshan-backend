@@ -30,9 +30,15 @@ app.use(compressionMiddleware);
 // runs first (as it did before), it consumes the stream and the webhook's
 // raw parser gets nothing — signature verification silently fails on every
 // real webhook call. Skip JSON/urlencoded parsing for that one path.
+//
+// 10kb is deliberately tight for every other route (small forms — coupons,
+// pricing rows, site_content blobs). Diet plans are the one payload shape
+// that's legitimately much bigger (many days x meals x foods), so they get
+// their own higher limit instead of loosening it for every admin route.
 app.use((req, res, next) => {
     if (req.originalUrl === '/api/webhooks/razorpay') return next();
-    express.json({ limit: '10kb' })(req, res, next);
+    const limit = req.originalUrl.startsWith('/api/admin/diet-plans') ? '2mb' : '10kb';
+    express.json({ limit })(req, res, next);
 });
 app.use((req, res, next) => {
     if (req.originalUrl === '/api/webhooks/razorpay') return next();
