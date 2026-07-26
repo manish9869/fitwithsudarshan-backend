@@ -42,13 +42,15 @@ export async function sendEmail(req, res, next) {
     }
 
     // ── Resource vault PDF attachment ─────────────────────────────────────
-    // pdfUrl can be passed explicitly per-send (data.pdfUrl), or falls back
-    // to RESOURCE_VAULT_PDF_URL in env — set that once you have the file
-    // hosted somewhere with a direct-download link, no code change needed.
+    // The URL is always server-controlled (env var or the hardcoded default)
+    // — never taken from the request body. `fetchPdfAttachment` does a raw
+    // fetch() with no domain restriction, so trusting a client-supplied URL
+    // here would let anyone make this server fetch arbitrary URLs (SSRF) and
+    // have the response emailed out as an attachment.
     let attachments = [];
     let hasAttachment = false;
     if (template === 'resource_vault') {
-      const pdfUrl = data.pdfUrl || process.env.RESOURCE_VAULT_PDF_URL || DEFAULT_RESOURCE_VAULT_PDF_URL;
+      const pdfUrl = process.env.RESOURCE_VAULT_PDF_URL || DEFAULT_RESOURCE_VAULT_PDF_URL;
       const attachment = await fetchPdfAttachment(pdfUrl, 'RECODE-Comeback-Blueprint.pdf');
       if (attachment) {
         attachments = [attachment];
