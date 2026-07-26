@@ -23,6 +23,7 @@ import {
     recodeMethod,
     testimonials,
     blogPosts,
+    transformations,
 } from '../data/SiteData.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -549,12 +550,19 @@ async function seed() {
     );
 
     // ── recode_method ─────────────────────────────────────────────────────
+    // No natural unique key on this table, so upsert() without onConflict
+    // just inserts a fresh row every run. Clear it first for a clean reseed.
+
+    await check(
+        'recode_method (clear)',
+        supabase.from('recode_method').delete().not('id', 'is', null)
+    );
 
     await check(
         'recode_method',
         supabase
             .from('recode_method')
-            .upsert(
+            .insert(
                 recodeMethod.map((r, i) => ({
                     step: r.step,
                     title: r.title,
@@ -567,6 +575,11 @@ async function seed() {
     );
 
     // ── testimonials ──────────────────────────────────────────────────────
+
+    await check(
+        'testimonials (clear)',
+        supabase.from('testimonials').delete().not('id', 'is', null)
+    );
 
     await check(
         'testimonials',
@@ -583,6 +596,34 @@ async function seed() {
                     quote: t.quote,
                     rating: t.rating,
                     avatar: t.avatar,
+                    sort_order: i,
+                    active: true,
+                }))
+            )
+    );
+
+    // ── transformations ───────────────────────────────────────────────────
+
+    await check(
+        'transformations (clear)',
+        supabase.from('transformations').delete().not('id', 'is', null)
+    );
+
+    await check(
+        'transformations',
+        supabase
+            .from('transformations')
+            .insert(
+                transformations.map((t, i) => ({
+                    name: t.name,
+                    role: t.role,
+                    duration: t.duration,
+                    weight_lost: t.weightLost,
+                    category: t.category,
+                    quote: t.quote,
+                    stats: t.stats,
+                    photo_before: t.photoBefore,
+                    photo_after: t.photoAfter,
                     sort_order: i,
                     active: true,
                 }))
@@ -676,10 +717,15 @@ async function seed() {
     ];
 
     await check(
+        'faqs (clear)',
+        supabase.from('faqs').delete().not('id', 'is', null)
+    );
+
+    await check(
         'faqs',
         supabase
             .from('faqs')
-            .upsert(faqRows)
+            .insert(faqRows)
     );
 
     // ── Privacy Policy ────────────────────────────────────────────────────
@@ -813,12 +859,113 @@ We aim to respond within 24–48 hours on business days.`,
         },
     ];
 
-    // NOTE:
-    // We don't currently have your complete Terms.jsx sections in the
-    // supplied SiteData file, so this seeds a safe empty sections array.
-    // Replace this with the existing Terms.jsx sections when ready.
+    const termsSections = [
+        {
+            title: '1. Services',
+            content: `FitWithSudarshan provides fitness coaching, nutrition guidance, online coaching, video consultation, personal training, and transformation support under the RECODE™ system.
 
-    const termsSections = [];
+Our services may include workout plans, nutrition guidance, progress tracking, check-ins, educational resources, consultation, and lifestyle support.`,
+        },
+        {
+            title: '2. Health Disclaimer',
+            content: `RECODE™ coaching is not medical treatment, medical diagnosis, or a replacement for professional medical advice.
+
+Clients are responsible for consulting their doctor before starting any fitness, nutrition, or lifestyle program, especially if they have any medical condition, injury, pregnancy, recent surgery, medication use, or health concern.
+
+By joining, the client confirms that they are physically fit to participate or have taken medical clearance where required.`,
+        },
+        {
+            title: '3. Results Disclaimer',
+            content: `Results vary from person to person.
+
+Transformation depends on consistency, lifestyle, health status, nutrition adherence, training effort, sleep, stress, medical history, and other individual factors.
+
+We do not guarantee a specific weight loss number, muscle gain amount, physique outcome, or timeline.`,
+        },
+        {
+            title: '4. Client Responsibility',
+            content: `The client agrees to provide accurate information about health history, lifestyle, food habits, injuries, medications, and goals.
+
+The client is responsible for following the plan safely and informing the coach immediately about pain, discomfort, injury, illness, or any medical changes.`,
+        },
+        {
+            title: '5. Payments',
+            content: `All payments must be completed before the service starts.
+
+Payment confirmation will be shared through email, receipt, or invoice.
+
+Plans are activated from the agreed start date after payment confirmation.`,
+        },
+        {
+            title: '6. Refund & Cancellation Policy',
+            content: `Due to the personalized nature of coaching, payments are generally non-refundable once the plan, onboarding, consultation, or coaching process has started.
+
+If a refund request is made before the plan begins, FitWithSudarshan may review the request on a case-by-case basis.
+
+No refunds are applicable for lack of consistency, non-adherence, missed check-ins, change of mind, or unused days after activation.
+
+For personal training, missed sessions must be informed in advance as per the agreed schedule. Uninformed missed sessions may be counted as completed.`,
+        },
+        {
+            title: '7. Pause / Extension',
+            content: `Any pause or extension request will be reviewed case-by-case.
+
+Pauses may be considered for genuine medical emergencies, travel, or unavoidable situations, subject to approval.`,
+        },
+        {
+            title: '8. Communication',
+            content: `Official communication may happen through WhatsApp, email, phone, website forms, or scheduled calls.
+
+Clients are expected to respond to check-ins and updates on time for best results.`,
+        },
+        {
+            title: '9. Personal Training',
+            content: `Personal Training in Mumbai is subject to location, availability, travel feasibility, schedule, and slot confirmation.
+
+The coach reserves the right to accept or decline personal training requests depending on availability and feasibility.`,
+        },
+        {
+            title: '10. Content & Intellectual Property',
+            content: `All workout plans, nutrition guidance, PDF files, check-in systems, coaching methods, text, images, videos, and RECODE™ materials are the intellectual property of FitWithSudarshan.
+
+Clients may not copy, resell, share, distribute, or use the content commercially without written permission.`,
+        },
+        {
+            title: '11. Use of Transformation Photos / Testimonials',
+            content: `Client photos, videos, testimonials, or progress data will only be used for marketing with client consent.
+
+Clients may request not to share their identity publicly.`,
+        },
+        {
+            title: '12. Privacy',
+            content: `Client information is kept confidential and used only for coaching, communication, progress tracking, payment, and service improvement.
+
+We do not sell client data.`,
+        },
+        {
+            title: '13. Limitation of Liability',
+            content: `FitWithSudarshan, RECODE™, and Sudarshan Chavan are not responsible for injuries, health issues, losses, or damages caused by incorrect exercise execution, undisclosed medical conditions, non-compliance, self-modification of plans, or failure to seek medical advice.`,
+        },
+        {
+            title: '14. Changes to Services',
+            content: `FitWithSudarshan may update plans, pricing, services, content, or terms at any time.
+
+Existing paid services will continue as per the agreed plan unless mutually updated.`,
+        },
+        {
+            title: '15. Governing Location',
+            content: `These terms are intended for services operated from Mumbai, Maharashtra, India.`,
+        },
+        {
+            title: '16. Contact',
+            content: `For any questions, contact:
+
+FitWithSudarshan
+Email: Fitwithsudarshanofficial@gmail.com
+Phone: 9619708124
+Location: Mumbai, Maharashtra, India`,
+        },
+    ];
 
     // ── legal_pages ───────────────────────────────────────────────────────
 

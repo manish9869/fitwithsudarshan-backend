@@ -33,6 +33,7 @@ const SITE_KEYS = [
     'whatsapp_templates',
     'sticky_cta',
     'floating_whatsapp',
+    'pricing_sale_flags',
 ];
 
 function assertTable(table) {
@@ -57,10 +58,13 @@ export async function listRows(table) {
 
     const supabase = getSupabaseAdmin();
 
-    const { data, error } = await supabase
-        .from(table)
-        .select('*')
-        .order('sort_order', { ascending: true });
+    // legal_pages has no sort_order column — it's keyed by slug, not ranked.
+    let query = supabase.from(table).select('*');
+    query = table === 'legal_pages'
+        ? query.order('slug', { ascending: true })
+        : query.order('sort_order', { ascending: true });
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -328,6 +332,7 @@ export async function getPublicContent() {
         whatsappTemplates,
         stickyCta,
         floatingWhatsapp,
+        saleFlags,
         coachingTypes,
         durationsRows,
         pricingRows,
@@ -353,6 +358,7 @@ export async function getPublicContent() {
         getSiteContent('whatsapp_templates'),
         getSiteContent('sticky_cta'),
         getSiteContent('floating_whatsapp'),
+        getSiteContent('pricing_sale_flags'),
 
         listRows('coaching_types'),
         listRows('durations'),
@@ -396,6 +402,11 @@ export async function getPublicContent() {
         whatsappTemplates: whatsappTemplates || {},
         stickyCta: stickyCta || {},
         floatingWhatsapp: floatingWhatsapp || {},
+        // Array of "coachingTypeId:planType:durationMonths" strings — the
+        // exact price cells currently flagged as "on sale". Replaces the old
+        // durations.on_sale column, which applied to every coaching type and
+        // plan type at once instead of one specific cell.
+        saleFlags: Array.isArray(saleFlags) ? saleFlags : [],
 
         coachingTypes: coachingTypes
             .filter((c) => c.active)
