@@ -8,7 +8,7 @@
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { getTransporter } from './emailController.js';
 import { renderTemplate } from '../services/emailTemplates.js';
-import { recordPayment, getPaymentsForEnrollment, listOutstandingBalances, recomputeEnrollmentTotals, upsertLatestPayment, deleteEnrollmentWithPayments } from '../services/paymentLedgerService.js';
+import { recordPayment, getPaymentsForEnrollment, listOutstandingBalances, recomputeEnrollmentTotals, upsertLatestPayment } from '../services/paymentLedgerService.js';
 import { config } from '../config/env.js';
 import logger from '../config/logger.js';
 import { fetchPdfAttachment, DEFAULT_RESOURCE_VAULT_PDF_URL } from '../services/pdfAttachmentService.js';

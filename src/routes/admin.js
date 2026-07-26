@@ -49,6 +49,7 @@ import {
     getSiteKey, putSiteKey,
     getBasicConsultationHandler, putBasicConsultationHandler,
     getPricingHandler, putPricingHandler, deletePricingHandler,
+    putLegalPageHandler,
 } from '../controllers/adminContentController.js';
 
 const router = Router();
@@ -134,6 +135,12 @@ router.put('/content/basic-consultation', putBasicConsultationHandler);
 router.get('/content/pricing', getPricingHandler);
 router.put('/content/pricing', putPricingHandler);
 router.delete('/content/pricing/:id', deletePricingHandler);
+
+// Legal pages are keyed by slug (not the generic table :id column), so they
+// get their own upsert route rather than going through content/:table/:id.
+// This was previously missing entirely — the admin Legal Pages editor's
+// save button was hitting a 404 on every save.
+router.put('/content/legal-pages/:slug', putLegalPageHandler);
 
 router.get('/content/:table', listTable);
 router.post('/content/:table', createTableRow);
