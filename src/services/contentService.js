@@ -373,6 +373,12 @@ export async function getPublicContent() {
         listRows('legal_pages'),
     ]);
 
+    const pricingTableMapped = nestPricing(pricingRows);
+    // Map keyed by "coachingTypeId:planType:durationMonths" → { onSale, originalPrice }.
+    // Replaces the old durations.on_sale column, which applied to every
+    // coaching type and plan type at once instead of one specific cell.
+    const saleFlagsMapped = (saleFlags && typeof saleFlags === 'object' && !Array.isArray(saleFlags)) ? saleFlags : {};
+
     const data = {
         brand: brand || {},
         coach: coach || {},
@@ -402,11 +408,7 @@ export async function getPublicContent() {
         whatsappTemplates: whatsappTemplates || {},
         stickyCta: stickyCta || {},
         floatingWhatsapp: floatingWhatsapp || {},
-        // Array of "coachingTypeId:planType:durationMonths" strings — the
-        // exact price cells currently flagged as "on sale". Replaces the old
-        // durations.on_sale column, which applied to every coaching type and
-        // plan type at once instead of one specific cell.
-        saleFlags: Array.isArray(saleFlags) ? saleFlags : [],
+        saleFlags: saleFlagsMapped,
 
         coachingTypes: coachingTypes
             .filter((c) => c.active)
@@ -414,11 +416,9 @@ export async function getPublicContent() {
 
         durations: durationsRows.map(mapDuration),
 
-        pricingTable: nestPricing(pricingRows),
+        pricingTable: pricingTableMapped,
 
-        basicConsultation: basicConsultation
-            ? mapBasicConsultation(basicConsultation)
-            : null,
+        basicConsultation: mapBasicConsultation(basicConsultation, pricingTableMapped, saleFlagsMapped),
 
         services: services
             .filter((s) => s.active)
@@ -490,16 +490,27 @@ function mapDuration(r) {
     };
 }
 
-function mapBasicConsultation(r) {
+// Basic Consultation is just another cell in the unified pricing table
+// (coaching type "online", plan type "basic_individual"/"basic_couple",
+// duration "1") — NOT a separate priced entity. The basic_consultation
+// table only holds marketing copy (name/tagline/description/features) now.
+// Price and "on sale" state both come from the same source every other
+// plan uses, so there's exactly one place to edit either.
+function mapBasicConsultation(r, pricingTable, saleFlags) {
+    if (!r) return null;
+
+    const individualKey = 'online:basic_individual:1';
+    const coupleKey = 'online:basic_couple:1';
+
     return {
         coachingId: 'basic',
         name: r.name,
         tagline: r.tagline,
         description: r.description,
-        priceIndividual: Number(r.price_individual),
-        priceCouple: Number(r.price_couple),
-        originalPriceIndividual: Number(r.original_price_individual),
-        originalPriceCouple: Number(r.original_price_couple),
+        priceIndividual: Number(pricingTable.online?.basic_individual?.['1'] ?? 0),
+        priceCouple: Number(pricingTable.online?.basic_couple?.['1'] ?? 0),
+        originalPriceIndividual: saleFlags[individualKey]?.onSale ? Number(saleFlags[individualKey].originalPrice) || null : null,
+        originalPriceCouple: saleFlags[coupleKey]?.onSale ? Number(saleFlags[coupleKey].originalPrice) || null : null,
         saleLabel: r.sale_label,
         features: r.features || [],
     };

@@ -50,5 +50,18 @@ export const paymentLimiter = rateLimit({
     skipSuccessfulRequests: false,
 });
 
+// Email / PDF endpoints — unauthenticated but expensive (real email sends
+// from the business Gmail account, headless-Chrome PDF generation). The
+// global limiter (100/15min) is too loose for these on its own — this caps
+// abuse (spam relay, cost inflation) while still covering realistic
+// contact-form / receipt-download traffic. 20 requests per 15 min per IP.
+export const emailLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests. Please try again later.' },
+});
+
 // ── Compression ───────────────────────────────────────────────────────────────
 export const compressionMiddleware = compression();
