@@ -22,6 +22,8 @@ export function getContentVersion() {
 export const ALLOWED_TABLES = [
     'coaching_types',
     'durations',
+    'diet_foods',
+    'diet_exercises',
     'recode_method',
     'testimonials',
     'blog_posts',
