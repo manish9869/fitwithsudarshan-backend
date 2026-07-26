@@ -476,6 +476,7 @@ function mapDuration(r) {
         sublabel: r.sublabel,
         description: r.description,
         popular: r.popular,
+        onSale: r.on_sale,
     };
 }
 
