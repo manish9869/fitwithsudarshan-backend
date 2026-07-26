@@ -13,7 +13,7 @@ import { config } from '../config/env.js';
 import logger from '../config/logger.js';
 import { fetchPdfAttachment, DEFAULT_RESOURCE_VAULT_PDF_URL } from '../services/pdfAttachmentService.js';
 import { generatePaymentReceiptBuffer } from '../services/paymentReceiptService.js';
-import { toTitleCase } from './textFormat.js';
+import { toTitleCase } from '..utils/textFormat.js';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function generateEnrollmentId() {

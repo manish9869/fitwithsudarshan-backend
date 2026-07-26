@@ -15,7 +15,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import ws from 'ws';
-import { toTitleCase } from './textFormat.js';
+import { toTitleCase } from '..utils/textFormat.js';
 const BUCKET = 'assessments';
 const SIGNED_URL_EXPIRY_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
