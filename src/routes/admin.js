@@ -4,6 +4,7 @@ import multer from 'multer';
 import { requireAdminAuth } from '../middleware/adminAuth.js';
 import { uploadImage } from '../controllers/uploadController.js';
 import { adminLogin, adminMe, adminChangePassword } from '../controllers/adminAuthController.js';
+import { getAdminProfile, updateAdminProfile } from '../controllers/adminProfileController.js';
 import {
     listEnrollments,
     getEnrollment,
@@ -72,6 +73,8 @@ router.use(requireAdminAuth);
 router.get('/me', adminMe);
 router.get('/assessments/export', exportAssessments);
 router.post('/change-password', adminChangePassword);
+router.get('/profile', getAdminProfile);
+router.patch('/profile', updateAdminProfile);
 
 router.get('/dashboard', getDashboard);
 
