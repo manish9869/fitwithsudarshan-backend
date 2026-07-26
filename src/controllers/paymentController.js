@@ -12,6 +12,7 @@ import { logTxnStep } from '../services/txnLogService.js';
 import { generateEnrollmentId } from '../utils/enrollmentId.js';
 import { waitUntil } from '@vercel/functions';
 import { generatePaymentReceiptBuffer } from '../services/paymentReceiptService.js';
+import { toTitleCase } from './textFormat.js';
 // ── POST /api/create-order ────────────────────────────────────────────────
 // Client no longer sends `amount` — the server resolves the real price and
 // validates any coupon. This is what stops price tampering: the client
