@@ -4,8 +4,19 @@ import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 const CACHE_TTL_MS = 30_000;
 let _cache = { data: null, ts: 0 };
 
+// Bumped on every content mutation. The frontend polls this cheaply (no DB
+// query, just a number in memory) to know when to refetch the full content
+// payload — that's what lets an already-open customer tab pick up an admin
+// price/content change without the customer having to hard-refresh.
+let _version = Date.now();
+
 export function invalidateContentCache() {
     _cache = { data: null, ts: 0 };
+    _version = Date.now();
+}
+
+export function getContentVersion() {
+    return _version;
 }
 
 export const ALLOWED_TABLES = [
