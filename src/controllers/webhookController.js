@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { logTxnStep } from '../services/txnLogService.js';
 import { finalizePaidEnrollment } from '../services/paymentLedgerService.js';
 import { sendEnrollmentConfirmation } from './paymentController.js';
+import { timingSafeEqualStr } from '../utils/razorpay.js';
 import logger from '../config/logger.js';
 
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -25,7 +26,7 @@ export async function handleRazorpayWebhook(req, res) {
         const signature = req.headers['x-razorpay-signature'];
         const expected = crypto.createHmac('sha256', WEBHOOK_SECRET).update(req.body).digest('hex');
 
-        if (signature !== expected) {
+        if (!timingSafeEqualStr(expected, signature)) {
             logger.warn('[webhook] signature mismatch');
             return res.status(400).json({ error: 'Invalid webhook signature' });
         }

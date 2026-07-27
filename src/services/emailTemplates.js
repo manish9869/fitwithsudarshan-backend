@@ -5,6 +5,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { config } from '../config/env.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.resolve(__dirname, '../templates');
@@ -252,10 +253,15 @@ const templateBuilders = {
     assessment_customer(d) {
         const firstName = d.first_name || 'there';
         const subject = `✅ Assessment received, ${firstName}! — RECODE™`;
+        const photosMissing = !d.photo_front_path || !d.photo_side_path;
+        const uploadPhotosUrl = (photosMissing && config.publicSiteUrl && d.photo_upload_token)
+            ? `${config.publicSiteUrl}/upload-photos/${d.photo_upload_token}`
+            : '';
         const html = inject(readTemplate('assessment_customer'), {
             first_name: firstName,
             plan: d.plan || '—',
             main_goal: d.main_goal || '—',
+            uploadPhotosUrl,
         });
         return { subject, html };
     },
