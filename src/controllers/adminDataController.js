@@ -120,9 +120,28 @@ export async function updateEnrollmentStatus(req, res) {
             });
         }
         const supabase = getSupabaseAdmin();
+
+        const update = { payment_status: status };
+        // Marking something failed/refunded means the money is no longer
+        // actually held — zero amount_paid so revenue totals (dashboard,
+        // enrollments list, manual list) stop counting it, and restore the
+        // balance so a follow-up/retry starts from the full amount owed.
+        // Previously this endpoint only ever flipped the status label,
+        // leaving amount_paid/balance_due frozen at whatever they were —
+        // that's exactly how a real enrollment ended up permanently
+        // inflating revenue after being marked "failed" post-payment.
+        if (status === 'failed' || status === 'refunded') {
+            const { data: existing } = await supabase
+                .from('enrollments').select('total_amount, amount_paid').eq('id', req.params.id).maybeSingle();
+            const total = Number(existing?.total_amount ?? existing?.amount_paid ?? 0);
+            update.amount_paid = 0;
+            update.balance_due = total;
+            update.payment_plan_status = 'pending';
+        }
+
         const { data, error } = await supabase
             .from('enrollments')
-            .update({ payment_status: status })
+            .update(update)
             .eq('id', req.params.id)
             .select()
             .single();
