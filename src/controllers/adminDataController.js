@@ -564,12 +564,17 @@ export async function getDashboard(req, res) {
 
         if (e1 || e2 || e3 || e4 || e6 || e7) throw (e1 || e2 || e3 || e4 || e6 || e7);
 
-        // AFTER
+        // Outstanding balance — excludes never-completed website checkouts
+        // (balance_due = full expected price, nothing paid — an abandoned
+        // cart, not money genuinely outstanding). A manual enrollment in the
+        // same $0-paid state is a deliberate entry and still counts. See the
+        // matching exclusion in listOutstandingBalances().
         const { data: balanceRows, error: eBal } = await supabase
             .from('enrollments')
             .select('balance_due')
             .is('deleted_at', null)
-            .gt('balance_due', 0);
+            .gt('balance_due', 0)
+            .or('source.neq.website,payment_status.neq.pending');
 
         if (eBal) throw eBal;
 
@@ -638,9 +643,16 @@ export async function getDashboard(req, res) {
         });
         const revenueByCoachingType = Object.entries(revenueByCoaching).map(([name, value]) => ({ name, value: Math.round(value) }));
 
-        // new-vs-returning style: coupon usage over time isn't needed; add this instead:
+        // Rough conversion signal: paid enrollments vs. assessments started in
+        // the same window. NOT a strict per-person funnel — most enrollments
+        // on this site come from direct checkout with no assessment at all,
+        // so paidEnrollments and assessments are independently-counted sets,
+        // not "assessment X led to enrollment X". When paid enrollments
+        // outnumber assessments in a window (common — direct checkout is the
+        // main path), the raw ratio can exceed 100%, which is meaningless for
+        // a percentage; it's capped here rather than shown uncapped.
         const conversionRate = (assessments || []).length
-            ? Math.round((paidEnrollments.length / (assessments || []).length) * 100)
+            ? Math.min(100, Math.round((paidEnrollments.length / (assessments || []).length) * 100))
             : null;
 
 

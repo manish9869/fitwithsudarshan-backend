@@ -13,6 +13,7 @@ import { generateEnrollmentId } from '../utils/enrollmentId.js';
 import { waitUntil } from '@vercel/functions';
 import { toTitleCase } from '../utils/textFormat.js';
 import { finalizePaidEnrollment } from '../services/paymentLedgerService.js';
+import { isMaintenanceModeEnabled } from '../services/contentService.js';
 // ── POST /api/create-order ────────────────────────────────────────────────
 // Client no longer sends `amount` — the server resolves the real price and
 // validates any coupon. This is what stops price tampering: the client
@@ -26,6 +27,15 @@ export async function createOrder(req, res, next) {
     } = req.body;
 
     try {
+        // Hard stop, independent of the frontend's own maintenance-page
+        // redirect — this is what actually guarantees no new order/charge
+        // can be created while maintenance mode is on, even from a stale
+        // cached page or a direct API call.
+        if (await isMaintenanceModeEnabled()) {
+            logTxnStep({ step: 'create_order', status: 'failed', message: 'blocked — maintenance mode enabled' });
+            return res.status(503).json({ error: 'Enrollment is temporarily unavailable — the site is under maintenance. Please try again shortly.' });
+        }
+
         logTxnStep({ step: 'create_order', status: 'started', metadata: { coachingType, planType, durationMonths } });
 
         const validCoachingTypes = await getValidCoachingTypeIds();
@@ -78,7 +88,20 @@ export async function createOrder(req, res, next) {
             plan_type: planType,
             coaching_type: coachingType,
             duration_months: durationMonths || null,
-            amount_paid: amountRupees,          // expected amount; overwritten with the real captured amount later
+            // amount_paid must reflect money actually RECEIVED — 0 here,
+            // since this row is created before the customer has paid
+            // anything. (It used to be pre-filled with the expected price,
+            // which made every "amount paid" / "balance due" / "fully paid"
+            // computation downstream — the admin drawer header, the payment
+            // ledger panel, the record-payment modal's hard-block, even the
+            // enrollments list's Total Revenue sum — read a never-completed
+            // checkout as fully paid.) The expected price still needs to be
+            // visible before payment, so it goes in total_amount instead,
+            // exactly like a paid enrollment's total_amount does.
+            amount_paid: 0,
+            total_amount: amountRupees,
+            balance_due: amountRupees,
+            payment_plan_status: 'pending',
             original_amount: originalAmountRupees,
             coupon_code: appliedCoupon?.code || null,
             coupon_savings: appliedCoupon?.savings || 0,

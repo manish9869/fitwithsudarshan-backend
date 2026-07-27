@@ -47,6 +47,7 @@ const SITE_KEYS = [
     'floating_whatsapp',
     'pricing_sale_flags',
     'pricing_popular_flags',
+    'maintenance',
 ];
 
 function assertTable(table) {
@@ -206,6 +207,15 @@ export async function setSiteContent(key, value) {
     return data.value;
 }
 
+// Cheap standalone check for the payment flow — does NOT go through the
+// getPublicContent() cache, so an admin flipping maintenance on takes
+// effect on the very next checkout attempt instead of waiting up to
+// CACHE_TTL_MS for the public payload cache to expire.
+export async function isMaintenanceModeEnabled() {
+    const value = await getSiteContent('maintenance');
+    return !!value?.enabled;
+}
+
 // ── basic_consultation singleton ──────────────────────────────────────────
 export async function getBasicConsultation() {
     const supabase = getSupabaseAdmin();
@@ -347,6 +357,7 @@ export async function getPublicContent() {
         floatingWhatsapp,
         saleFlags,
         popularFlags,
+        maintenance,
         coachingTypes,
         durationsRows,
         pricingRows,
@@ -373,6 +384,7 @@ export async function getPublicContent() {
         getSiteContent('floating_whatsapp'),
         getSiteContent('pricing_sale_flags'),
         getSiteContent('pricing_popular_flags'),
+        getSiteContent('maintenance'),
 
         listRows('coaching_types'),
         listRows('durations'),
@@ -428,6 +440,7 @@ export async function getPublicContent() {
         floatingWhatsapp: floatingWhatsapp || {},
         saleFlags: saleFlagsMapped,
         popularFlags: popularFlagsMapped,
+        maintenance: maintenance || { enabled: false },
 
         coachingTypes: coachingTypes
             .filter((c) => c.active)
