@@ -2,16 +2,41 @@
  * src/services/txnLogService.js
  *
  * Central logger for every step of a payment/enrollment transaction.
- * Writes to the `transaction_logs` Supabase table AND mirrors to winston,
- * so you have both a queryable audit trail per order/payment/enrollment
- * AND real-time console/file visibility.
+ * Mirrors to winston (console/file) always; writes to the `transaction_logs`
+ * Supabase table depending on the admin-controlled verbose-logging setting:
+ *   - OFF (default): only "important" entries are persisted — any failure/
+ *     warning, plus the final success of a real transaction (order created,
+ *     payment confirmed). The many step-by-step "started"/intermediate
+ *     entries (per checkout: order + confirm + webhook + client-side events
+ *     can easily add up to 15-20+ rows) are skipped, cutting DB write load.
+ *   - ON: every step is persisted, same as before — useful when actively
+ *     debugging a specific customer's payment.
+ * Toggle lives at Admin → Site Settings → Logging.
  *
  * CRITICAL: This must NEVER throw and must NEVER block or break the real
  * payment/enrollment flow. All failures here are swallowed and logged
  * to winston only.
  */
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
+import { isVerboseLoggingEnabled } from './contentService.js';
 import logger from '../config/logger.js';
+
+// Steps whose SUCCESS/FAILURE marks the actual outcome of a transaction —
+// always persisted regardless of the verbose setting. Their own "started"
+// marker is still verbose-only (see shouldPersist below); only the outcome
+// matters when verbose logging is off.
+const ESSENTIAL_STEPS = new Set([
+    'create_order',
+    'confirm_payment:db_update',
+    'webhook:db_update',
+    'webhook:unhandled',
+]);
+
+function shouldPersist(step, status) {
+    if (status === 'failed' || status === 'warning') return true; // errors/warnings always matter
+    if (status === 'started') return false; // pure "began" markers — lowest value, highest volume
+    return ESSENTIAL_STEPS.has(step); // a handful of real outcomes always kept; everything else is verbose-only
+}
 
 /**
  * @param {object} opts
@@ -45,6 +70,10 @@ export async function logTxnStep({
     }
 
     try {
+        if (!shouldPersist(step, status) && !(await isVerboseLoggingEnabled())) {
+            return;
+        }
+
         const supabase = getSupabaseAdmin();
         const { error } = await supabase.from('transaction_logs').insert([
             {

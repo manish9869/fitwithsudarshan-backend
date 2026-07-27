@@ -13,6 +13,11 @@ let _version = Date.now();
 export function invalidateContentCache() {
     _cache = { data: null, ts: 0 };
     _version = Date.now();
+    // Defined further down, but this function only ever runs after the
+    // whole module has finished evaluating — safe to reset here so a
+    // saved logging-toggle change takes effect on the very next log call
+    // instead of waiting out the cache TTL.
+    _verboseLoggingCache = { value: null, ts: 0 };
 }
 
 export function getContentVersion() {
@@ -48,6 +53,7 @@ const SITE_KEYS = [
     'pricing_sale_flags',
     'pricing_popular_flags',
     'maintenance',
+    'logging',
 ];
 
 function assertTable(table) {
@@ -214,6 +220,35 @@ export async function setSiteContent(key, value) {
 export async function isMaintenanceModeEnabled() {
     const value = await getSiteContent('maintenance');
     return !!value?.enabled;
+}
+
+// ── Verbose logging toggle ────────────────────────────────────────────────
+// Unlike isMaintenanceModeEnabled(), this IS cached — logTxnStep() calls this
+// on every single transaction-log write (many per checkout: order created,
+// signature checked, DB updated, coupon incremented, ledger inserted, each
+// email...), so a fresh DB read per call would itself add back a meaningful
+// chunk of the load this setting exists to cut. A short TTL keeps an admin's
+// toggle taking effect within seconds rather than needing a restart.
+const LOGGING_SETTING_CACHE_TTL_MS = 30_000;
+let _verboseLoggingCache = { value: null, ts: 0 };
+
+export async function isVerboseLoggingEnabled() {
+    const now = Date.now();
+    if (_verboseLoggingCache.value !== null && now - _verboseLoggingCache.ts < LOGGING_SETTING_CACHE_TTL_MS) {
+        return _verboseLoggingCache.value;
+    }
+    // Default OFF — reducing load is the point until an admin opts in.
+    let verbose = false;
+    try {
+        const value = await getSiteContent('logging');
+        verbose = !!value?.verbose;
+    } catch {
+        // Leave the last-known value in place on a transient read failure
+        // rather than assuming a state we haven't actually confirmed.
+        return _verboseLoggingCache.value ?? false;
+    }
+    _verboseLoggingCache = { value: verbose, ts: now };
+    return verbose;
 }
 
 // ── basic_consultation singleton ──────────────────────────────────────────

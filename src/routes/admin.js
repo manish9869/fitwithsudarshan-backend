@@ -42,7 +42,7 @@ import {
     sendPaymentReceiptEmail, deleteManualEnrollment,
     downloadEnrollmentInvoice, downloadEnrollmentPaymentReceipt,
 } from '../controllers/manualEnrollmentController.js';
-import { getTxnTimelineHandler } from '../controllers/logController.js';
+import { getTxnTimelineHandler, listLogsHandler } from '../controllers/logController.js';
 
 
 import {
@@ -128,6 +128,7 @@ router.get('/follow-ups/count', followUpsDueCount);
 router.post('/enrollments/:id/followup', markFollowUp);
 
 router.get('/txn-timeline', getTxnTimelineHandler);
+router.get('/logs', listLogsHandler);
 
 router.get('/content/site/:key', getSiteKey);
 router.put('/content/site/:key', putSiteKey);
