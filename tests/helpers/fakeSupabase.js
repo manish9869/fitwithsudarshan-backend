@@ -19,24 +19,42 @@ function nextId() {
     return `fake-id-${idCounter}`;
 }
 
-function matchesFilters(row, filters) {
-    return filters.every(([type, col, val]) => {
-        const cell = row[col];
-        switch (type) {
-            case 'eq': return cell === val;
-            case 'neq': return cell !== val;
-            case 'is': return val === null ? cell === null || cell === undefined : cell === val;
-            case 'gt': return cell != null && cell > val;
-            case 'gte': return cell != null && cell >= val;
-            case 'lt': return cell != null && cell < val;
-            case 'lte': return cell != null && cell <= val;
-            case 'in': return val.includes(cell);
-            case 'ilike': {
-                const pattern = String(val).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*');
-                return new RegExp(`^${pattern}$`, 'i').test(String(cell ?? ''));
-            }
-            default: return true;
+function matchesOne(row, [type, col, val]) {
+    const cell = row[col];
+    switch (type) {
+        case 'eq': return cell === val;
+        case 'neq': return cell !== val;
+        case 'is': return val === null ? cell === null || cell === undefined : cell === val;
+        case 'gt': return cell != null && cell > val;
+        case 'gte': return cell != null && cell >= val;
+        case 'lt': return cell != null && cell < val;
+        case 'lte': return cell != null && cell <= val;
+        case 'in': return val.includes(cell);
+        case 'ilike': {
+            const pattern = String(val).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*');
+            return new RegExp(`^${pattern}$`, 'i').test(String(cell ?? ''));
         }
+        case 'or': return val.some((cond) => matchesOne(row, cond));
+        default: return true;
+    }
+}
+
+function matchesFilters(row, filters) {
+    return filters.every((f) => matchesOne(row, f));
+}
+
+// Parses the comma-separated PostgREST filter string Supabase's .or() takes,
+// e.g. "source.neq.website,payment_status.neq.pending" — enough of the
+// syntax (eq/neq/is/gt/gte/lt/lte, plus null/true/false literals) to cover
+// how this codebase actually uses .or().
+function parsePostgrestOrString(str) {
+    return str.split(',').map((clause) => {
+        const [col, op, ...rest] = clause.split('.');
+        let val = rest.join('.');
+        if (val === 'null') val = null;
+        else if (val === 'true') val = true;
+        else if (val === 'false') val = false;
+        return [op, col, val];
     });
 }
 
@@ -72,7 +90,7 @@ export function createFakeSupabase(initialTables = {}) {
         api.lt = op('lt');
         api.lte = op('lte');
         api.ilike = op('ilike');
-        api.or = () => api; // not modeled — none of the flows under test rely on OR filters
+        api.or = (str) => { filters.push(['or', null, parsePostgrestOrString(str)]); return api; };
         api.not = () => api;
         api.order = () => api;
         api.range = () => api;

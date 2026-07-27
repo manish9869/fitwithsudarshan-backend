@@ -113,7 +113,14 @@ describe('Full website enrollment journey', () => {
         const pendingRow = fake.tables.enrollments[0];
         expect(pendingRow.payment_status).toBe('pending');
         expect(pendingRow.razorpay_order_id).toBe(RAZORPAY_ORDER.id);
-        expect(pendingRow.amount_paid).toBe(EXPECTED_AMOUNT_RUPEES);
+        // amount_paid must be 0 until a payment actually lands — it used to
+        // be pre-filled with the expected price, which made the admin
+        // panel's "Amount Paid" / balance-due / fully-paid displays treat a
+        // never-completed checkout as already fully paid. The expected
+        // price belongs in total_amount/balance_due instead.
+        expect(pendingRow.amount_paid).toBe(0);
+        expect(pendingRow.total_amount).toBe(EXPECTED_AMOUNT_RUPEES);
+        expect(pendingRow.balance_due).toBe(EXPECTED_AMOUNT_RUPEES);
         expect(pendingRow.coupon_code).toBe('WELCOME10');
         expect(pendingRow.customer_name).toBe('Jane Doe'); // title-cased
 
