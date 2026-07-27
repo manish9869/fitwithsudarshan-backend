@@ -23,7 +23,10 @@
  */
 
 import multer from 'multer';
-import { submitAssessment, getSignedFileUrls } from '../services/assessmentService.js';
+import {
+    submitAssessment, getSignedFileUrls,
+    getAssessmentByUploadToken, uploadPhotosByToken,
+} from '../services/assessmentService.js';
 import { renderTemplate } from '../services/emailTemplates.js';
 import { config } from '../config/env.js';
 import logger from '../config/logger.js';
@@ -49,6 +52,13 @@ export const assessmentUpload = upload.fields([
     { name: 'photoFront', maxCount: 1 },
     { name: 'photoSide', maxCount: 1 },
     { name: 'bloodReport', maxCount: 1 },
+]);
+
+// Used by the standalone "upload photos later" endpoints below — same
+// multer instance/limits/fileFilter, just a narrower field set.
+export const photoOnlyUpload = upload.fields([
+    { name: 'photoFront', maxCount: 1 },
+    { name: 'photoSide', maxCount: 1 },
 ]);
 
 // ── Required fields ───────────────────────────────────────────────────────────
@@ -190,9 +200,99 @@ export async function submitAssessmentHandler(req, res, next) {
             logger.error(`[assessment] Email dispatch error: ${err.message}`)
         ));
 
-        return res.status(201).json({ success: true, assessmentId: row.id });
+        return res.status(201).json({
+            success: true,
+            assessmentId: row.id,
+            // Lets the frontend offer an immediate "upload photos later" link
+            // on the success screen, with zero dependency on email/WhatsApp.
+            photoUploadToken: row.photo_upload_token,
+        });
     } catch (err) {
         logger.error(`[assessment] ❌ Submission failed: ${err.message}`);
         next(err);
     }
+}
+
+// ── GET /api/upload-assessment-photos/:token ─────────────────────────────────
+// Lightweight status check the upload-later page uses to greet the client
+// and show which photos (if any) are already on file. Never returns signed
+// URLs here — just booleans — this route is unauthenticated by design.
+export async function getPhotoUploadStatusHandler(req, res, next) {
+    try {
+        const assessment = await getAssessmentByUploadToken(req.params.token);
+        if (!assessment) {
+            return res.status(404).json({ error: 'Invalid or expired upload link.' });
+        }
+        return res.status(200).json({
+            firstName: assessment.first_name,
+            plan: assessment.plan,
+            photoFrontUploaded: Boolean(assessment.photo_front_path),
+            photoSideUploaded: Boolean(assessment.photo_side_path),
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
+// ── POST /api/upload-assessment-photos/:token ────────────────────────────────
+export async function uploadPhotosByTokenHandler(req, res, next) {
+    try {
+        const files = {
+            photoFront: req.files?.photoFront?.[0],
+            photoSide: req.files?.photoSide?.[0],
+        };
+
+        if (!files.photoFront && !files.photoSide) {
+            return res.status(400).json({ error: 'Please choose at least one photo to upload.' });
+        }
+
+        const row = await uploadPhotosByToken(req.params.token, files);
+
+        logger.info(`[assessment] ✅ Later-upload photos saved for ${row.id}`);
+
+        // Best-effort re-notify the coach — don't block the response on it.
+        waitUntil(sendPhotosAddedEmail(row).catch((err) =>
+            logger.error(`[assessment] Photos-added email dispatch error: ${err.message}`)
+        ));
+
+        return res.status(200).json({ success: true });
+    } catch (err) {
+        if (err.status) {
+            return res.status(err.status).json({ error: err.message });
+        }
+        next(err);
+    }
+}
+
+// ── Re-notify the coach once photos land on an assessment they've already
+//    seen (coach-only — the customer already got their confirmation). ───────
+async function sendPhotosAddedEmail(assessmentRow) {
+    if (!config.email.gmailUser || !config.email.gmailAppPassword) {
+        logger.warn('[assessment] Skipped photos-added email — GMAIL_USER / GMAIL_APP_PASSWORD not set.');
+        return;
+    }
+
+    const coachEmail = config.email.coachEmail || config.email.gmailUser;
+
+    let fileUrls = { photoFrontUrl: null, photoSideUrl: null, bloodReportUrl: null };
+    try {
+        fileUrls = await getSignedFileUrls({
+            photo_front_path: assessmentRow.photo_front_path,
+            photo_side_path: assessmentRow.photo_side_path,
+            blood_report_path: assessmentRow.blood_report_path,
+        });
+    } catch (urlErr) {
+        logger.warn(`[assessment] ⚠️ Could not generate signed URLs for photos-added email: ${urlErr.message}`);
+    }
+
+    const { subject, html } = renderTemplate('assessment_coach', { ...assessmentRow, ...fileUrls });
+
+    await getTransporter().sendMail({
+        from: `"RECODE™ by FitWithSudarshan" <${config.email.gmailUser}>`,
+        to: coachEmail,
+        subject: `📸 Photos Added — ${subject}`,
+        html,
+    });
+
+    logger.info(`[assessment] ✅ Photos-added email sent → ${coachEmail}`);
 }

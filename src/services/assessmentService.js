@@ -118,6 +118,11 @@ export async function submitAssessment(fields, files = {}) {
         photo_side_path: photoSidePath,
         blood_report_path: bloodReportPath,
 
+        // Non-guessable token so a client can come back later and upload
+        // photos they skipped, without needing an account/login — see
+        // getAssessmentByUploadToken() / uploadPhotosByToken() below.
+        photo_upload_token: randomUUID(),
+
         status: 'new',
     };
 
@@ -164,4 +169,71 @@ export async function getSignedFileUrls({ photo_front_path, photo_side_path, blo
         getSignedFileUrl(blood_report_path),
     ]);
     return { photoFrontUrl, photoSideUrl, bloodReportUrl };
+}
+
+/**
+ * Look up an assessment by its public "upload photos later" token.
+ * Returns null if the token doesn't match any (non-deleted) row.
+ */
+export async function getAssessmentByUploadToken(token) {
+    if (!token) return null;
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase
+        .from('assessments')
+        .select('id, first_name, plan, photo_front_path, photo_side_path')
+        .eq('photo_upload_token', token)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+    if (error || !data) return null;
+    return data;
+}
+
+/**
+ * Upload whichever of photoFront / photoSide are provided and attach them
+ * to the assessment matching `token`. Only touches the columns for files
+ * that were actually sent — re-uploading just one photo leaves the other
+ * untouched.
+ *
+ * @param {string} token
+ * @param {{ photoFront?: object, photoSide?: object }} files
+ * @returns {Promise<object>} the updated assessment row
+ */
+export async function uploadPhotosByToken(token, files = {}) {
+    const assessment = await getAssessmentByUploadToken(token);
+    if (!assessment) {
+        const err = new Error('Invalid or expired upload link.');
+        err.status = 404;
+        throw err;
+    }
+
+    const supabase = getSupabase();
+    const updates = {};
+
+    if (files.photoFront) {
+        updates.photo_front_path = await uploadFile(supabase, files.photoFront, assessment.id, 'front');
+    }
+    if (files.photoSide) {
+        updates.photo_side_path = await uploadFile(supabase, files.photoSide, assessment.id, 'side');
+    }
+
+    if (Object.keys(updates).length === 0) {
+        const err = new Error('No photo files were provided.');
+        err.status = 400;
+        throw err;
+    }
+
+    const { data, error } = await supabase
+        .from('assessments')
+        .update(updates)
+        .eq('id', assessment.id)
+        .select()
+        .single();
+
+    if (error) {
+        throw new Error(`Failed to save uploaded photos: ${error.message}`);
+    }
+
+    return data;
 }

@@ -30,10 +30,24 @@ export async function fetchRazorpayPayment(paymentId) {
     return data;
 }
 
+// Plain `===` on a secret-derived value leaks timing information (an
+// attacker who can measure response latency could narrow down a guessed
+// signature byte-by-byte). crypto.timingSafeEqual() compares in constant
+// time regardless of where the first mismatch is — but it throws if the two
+// buffers differ in length, so that has to be checked (and short-circuited)
+// first; a length mismatch on hex-encoded input has nothing secret-dependent
+// left to leak.
+export function timingSafeEqualStr(a, b) {
+    const bufA = Buffer.from(String(a ?? ''));
+    const bufB = Buffer.from(String(b ?? ''));
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+}
+
 export function verifyPaymentSignature({ orderId, paymentId, signature }) {
     const expected = crypto
         .createHmac('sha256', keySecret)
         .update(`${orderId}|${paymentId}`)
         .digest('hex');
-    return expected === signature;
+    return timingSafeEqualStr(expected, signature);
 }

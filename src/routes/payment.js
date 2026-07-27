@@ -3,7 +3,10 @@ import express from 'express';
 import { createOrder, confirmPayment, healthCheck, downloadInvoice } from '../controllers/paymentController.js';
 import { sendEmail } from '../controllers/emailController.js';
 import { paymentLimiter, emailLimiter, assessmentLimiter } from '../middleware/security.js';
-import { assessmentUpload, submitAssessmentHandler } from '../controllers/assessmentController.js';
+import {
+    assessmentUpload, submitAssessmentHandler,
+    photoOnlyUpload, getPhotoUploadStatusHandler, uploadPhotosByTokenHandler,
+} from '../controllers/assessmentController.js';
 import { validateCoupon } from '../controllers/couponController.js';
 import { logClientEvent } from '../controllers/logController.js';
 import { handleRazorpayWebhook } from '../controllers/webhookController.js';
@@ -33,6 +36,12 @@ router.post('/invoice', emailLimiter, downloadInvoice);
 //    (10MB each) plus 2 emails plus a DB insert per call, so the generic
 //    global limiter alone is too loose for it. ───────────────────────────────
 router.post('/submit-assessment', assessmentLimiter, assessmentUpload, submitAssessmentHandler);
+
+// ── Upload photos later — token-based, lets a client who skipped photos at
+//    onboarding come back and attach them to the same assessment. Same
+//    limiter as submit-assessment (file uploads + a DB write). ─────────────
+router.get('/upload-assessment-photos/:token', assessmentLimiter, getPhotoUploadStatusHandler);
+router.post('/upload-assessment-photos/:token', assessmentLimiter, photoOnlyUpload, uploadPhotosByTokenHandler);
 
 router.post('/coupons/validate', paymentLimiter, validateCoupon);
 

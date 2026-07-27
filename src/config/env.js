@@ -28,4 +28,8 @@ export const config = {
     allowedOrigins: process.env.ALLOWED_ORIGINS
         ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
         : [], // empty = handled in corsMiddleware
+
+    // Public frontend origin (no trailing slash), used to build links embedded
+    // in emails (e.g. the "upload photos later" link). Empty = link omitted.
+    publicSiteUrl: (process.env.PUBLIC_SITE_URL || '').replace(/\/$/, ''),
 };
