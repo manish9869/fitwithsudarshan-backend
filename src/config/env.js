@@ -37,10 +37,15 @@ export const config = {
     // Visitors" widget. All three blank = feature is simply unavailable
     // (not a startup error, since most of the app doesn't depend on it).
     // .env files can't hold real newlines, so the private key is stored
-    // with literal "\n" sequences and unescaped here.
+    // with literal "\n" sequences and unescaped here. Also strips any
+    // stray wrapping quote/backtick characters some editors/shells add
+    // when pasting a multi-line secret onto one .env line (e.g. dotenv's
+    // backtick-quoted values pass their content through literally,
+    // including an inner "..." the value was copied with) — a valid PEM
+    // key never legitimately starts or ends with one.
     ga4: {
-        propertyId: process.env.GA4_PROPERTY_ID || '',
-        clientEmail: process.env.GA4_CLIENT_EMAIL || '',
-        privateKey: (process.env.GA4_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+        propertyId: (process.env.GA4_PROPERTY_ID || '').trim(),
+        clientEmail: (process.env.GA4_CLIENT_EMAIL || '').trim().replace(/^[`"']+|[`"']+$/g, ''),
+        privateKey: (process.env.GA4_PRIVATE_KEY || '').trim().replace(/^[`"']+|[`"']+$/g, '').replace(/\\n/g, '\n'),
     },
 };
