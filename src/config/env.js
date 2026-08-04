@@ -32,4 +32,15 @@ export const config = {
     // Public frontend origin (no trailing slash), used to build links embedded
     // in emails (e.g. the "upload photos later" link). Empty = link omitted.
     publicSiteUrl: (process.env.PUBLIC_SITE_URL || '').replace(/\/$/, ''),
+
+    // Optional — GA4 Realtime Data API, for the admin dashboard's "Live
+    // Visitors" widget. All three blank = feature is simply unavailable
+    // (not a startup error, since most of the app doesn't depend on it).
+    // .env files can't hold real newlines, so the private key is stored
+    // with literal "\n" sequences and unescaped here.
+    ga4: {
+        propertyId: process.env.GA4_PROPERTY_ID || '',
+        clientEmail: process.env.GA4_CLIENT_EMAIL || '',
+        privateKey: (process.env.GA4_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    },
 };
