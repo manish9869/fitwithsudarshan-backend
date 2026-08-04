@@ -29,6 +29,8 @@ export const ALLOWED_TABLES = [
     'durations',
     'diet_foods',
     'diet_exercises',
+    'diet_templates',
+    'diet_workout_templates',
     'recode_method',
     'testimonials',
     'blog_posts',
@@ -55,6 +57,7 @@ const SITE_KEYS = [
     'maintenance',
     'logging',
     'diet_units',
+    'diet_guidelines',
 ];
 
 function assertTable(table) {

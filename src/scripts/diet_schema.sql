@@ -97,3 +97,76 @@ alter table diet_foods add column if not exists calcium numeric;
 alter table diet_foods add column if not exists iron numeric;
 alter table diet_foods add column if not exists vitamin_c numeric;
 alter table diet_foods add column if not exists folate numeric;
+
+-- ── v4: regional/cuisine classification ──────────────────────────────────
+-- Lets an admin browse/filter the food library by regional cuisine (e.g.
+-- only show Gujarati food for a Gujarati client) instead of one flat list.
+-- Values are a fixed set maintained in the frontend (dietRegions.js) —
+-- 'Generic / Pan-Indian' is the default/catch-all for dishes eaten broadly
+-- across India or that don't fit one region.
+alter table diet_foods add column if not exists region text not null default 'Generic / Pan-Indian';
+
+-- ── v5: client cuisine preference + repeating-day plans ──────────────────
+-- client_cuisine: mirrors the client's chosen region (null = no preference)
+-- so it's remembered next time the plan is opened, same pattern as
+-- diet_preference/goal already being plain columns on this row.
+-- repeat_daily: when true, `days` still holds plan_duration entries (kept
+-- mirrored to Day 1 by the frontend) but Build Plan only lets the admin
+-- edit Day 1, and the PDF prints just that one day instead of repeating it
+-- plan_duration times — for clients who eat the same thing daily (hostel/
+-- PG students, tight schedules) instead of a different plan each day.
+alter table diet_plans add column if not exists client_cuisine text;
+alter table diet_plans add column if not exists repeat_daily boolean not null default false;
+
+-- ── v6: per-plan guideline override ───────────────────────────────────────
+-- Null = use the global default (site_content key 'diet_guidelines', set in
+-- Admin -> Site Settings). Set = this specific plan's PDF prints these
+-- lines instead, for a client who needs different advice (e.g. an injury,
+-- a medical restriction) without changing what every other plan shows.
+alter table diet_plans add column if not exists guidelines jsonb;
+
+-- ── v7: diet plan templates, DB-backed ────────────────────────────────────
+-- The "Use Template" quick-start step used to read from a hardcoded JS file
+-- — moved here so an admin can edit the 5 built-in templates or add new
+-- ones from Admin -> Diet Templates, and they show up in the wizard
+-- immediately with no code change/deploy.
+--
+-- days: same shape the wizard already worked with —
+--   [ { meals: [ { type, label, foodIds: [...] } ], restDay?: true }, ... ]
+-- One array entry per day-in-rotation; a plan longer than the array repeats
+-- it (day 8 of a 30-day plan reuses entry 0, etc). Food ids must exist in
+-- diet_foods (Admin -> Diet Foods).
+create table if not exists diet_templates (
+  id text primary key,
+  name text not null,
+  description text,
+  goal text,
+  diet_preference text,
+  region text,
+  days jsonb not null default '[]',
+  sort_order int not null default 0,
+  active boolean not null default true
+);
+
+-- exercise_days: [ ["push-ups","squats",...], ["lunges",...], ... ] — one
+-- array of exercise ids per day-in-rotation, same repeat-by-modulo rule as
+-- diet_templates.days. Exercise ids must exist in diet_exercises.
+create table if not exists diet_workout_templates (
+  id text primary key,
+  name text not null,
+  description text,
+  exercise_days jsonb not null default '[]',
+  sort_order int not null default 0,
+  active boolean not null default true
+);
+
+create index if not exists idx_diet_templates_sort on diet_templates(sort_order);
+create index if not exists idx_diet_workout_templates_sort on diet_workout_templates(sort_order);
+
+-- ── v8: budget-friendly food tag ──────────────────────────────────────────
+-- Lets an admin mark cheap staples (dal, rice, seasonal veg, eggs) so a
+-- student/tight-budget client's plan builder can filter to those, the same
+-- way client_cuisine already narrows by region. Purely a tag the admin sets
+-- per food — not derived from price data (none exists in this schema).
+alter table diet_foods add column if not exists is_budget_friendly boolean not null default false;
+alter table diet_plans add column if not exists client_budget_conscious boolean not null default false;
