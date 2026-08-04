@@ -8,8 +8,8 @@ import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 const PLAN_FIELDS = [
     'enrollment_id', 'client_name', 'client_age', 'client_gender', 'client_height',
     'client_weight', 'target_weight', 'goal', 'diet_preference', 'activity_level',
-    'allergies', 'client_notes', 'trainer_name', 'trainer_qualification', 'trainer_contact',
-    'plan_duration', 'include_exercise', 'status',
+    'allergies', 'client_notes', 'client_cuisine', 'client_budget_conscious', 'trainer_name', 'trainer_qualification', 'trainer_contact',
+    'plan_duration', 'include_exercise', 'repeat_daily', 'status', 'guidelines',
     // target_calories is only meaningful when target_calories_manual is true —
     // when false, the client just uses the live BMR/TDEE estimate instead of
     // a value frozen at whatever it was when the plan was last saved.
