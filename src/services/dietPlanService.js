@@ -10,6 +10,10 @@ const PLAN_FIELDS = [
     'client_weight', 'target_weight', 'goal', 'diet_preference', 'activity_level',
     'allergies', 'client_notes', 'trainer_name', 'trainer_qualification', 'trainer_contact',
     'plan_duration', 'include_exercise', 'status',
+    // target_calories is only meaningful when target_calories_manual is true —
+    // when false, the client just uses the live BMR/TDEE estimate instead of
+    // a value frozen at whatever it was when the plan was last saved.
+    'target_calories', 'target_calories_manual',
 ];
 
 function pickPlanFields(payload) {
