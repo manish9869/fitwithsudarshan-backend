@@ -74,22 +74,39 @@ function assertSiteKey(key) {
 }
 
 // ── Generic table CRUD (admin) ────────────────────────────────────────────
+// PostgREST (Supabase's API layer) caps any single response at 1000 rows by
+// default, silently — a plain .select('*') on a table with more rows than
+// that just returns the first 1000, no error, no indication anything was
+// cut off. diet_foods crossed that line the moment the CSV import landed
+// (1121 rows), which meant the last ~120 foods were invisible in both the
+// admin list and the Diet Plan Builder's food picker. Paging through with
+// .range() until a page comes back short fixes it for every table, not
+// just the one that happened to hit the ceiling first.
+const LIST_PAGE_SIZE = 1000;
+
 export async function listRows(table) {
     assertTable(table);
 
     const supabase = getSupabaseAdmin();
+    const orderColumn = table === 'legal_pages' ? 'slug' : 'sort_order'; // legal_pages has no sort_order — keyed by slug
 
-    // legal_pages has no sort_order column — it's keyed by slug, not ranked.
-    let query = supabase.from(table).select('*');
-    query = table === 'legal_pages'
-        ? query.order('slug', { ascending: true })
-        : query.order('sort_order', { ascending: true });
+    const rows = [];
+    let from = 0;
+    for (;;) {
+        const { data, error } = await supabase
+            .from(table)
+            .select('*')
+            .order(orderColumn, { ascending: true })
+            .range(from, from + LIST_PAGE_SIZE - 1);
 
-    const { data, error } = await query;
+        if (error) throw error;
 
-    if (error) throw error;
+        rows.push(...(data || []));
+        if (!data || data.length < LIST_PAGE_SIZE) break;
+        from += LIST_PAGE_SIZE;
+    }
 
-    return data || [];
+    return rows;
 }
 
 export async function createRow(table, payload) {
