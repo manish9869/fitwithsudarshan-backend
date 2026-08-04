@@ -54,6 +54,7 @@ const SITE_KEYS = [
     'pricing_popular_flags',
     'maintenance',
     'logging',
+    'diet_units',
 ];
 
 function assertTable(table) {
