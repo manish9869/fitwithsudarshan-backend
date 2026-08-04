@@ -68,3 +68,19 @@ create table if not exists diet_plan_days (
 
 create index if not exists idx_diet_plan_days_plan_id on diet_plan_days(plan_id);
 create index if not exists idx_diet_plans_enrollment_id on diet_plans(enrollment_id);
+
+-- ── v2: precise serving units + manual calorie target ───────────────────────
+-- Run this block once in the Supabase SQL editor to pick up:
+--   - a structured serving amount/unit on each food (grams, ml, oz,
+--     cup/bowl sizes, katori, etc.) instead of only a free-text label like
+--     "1 cup", which is ambiguous about the actual size.
+--   - an optional admin-set calorie target per plan, instead of always
+--     using the auto-calculated BMR/TDEE estimate.
+-- Existing rows are untouched — serving_unit is null until an admin edits
+-- that food, and the app falls back to the legacy serving_size text until then.
+
+alter table diet_foods add column if not exists serving_qty numeric default 1;
+alter table diet_foods add column if not exists serving_unit text;
+
+alter table diet_plans add column if not exists target_calories numeric;
+alter table diet_plans add column if not exists target_calories_manual boolean not null default false;
