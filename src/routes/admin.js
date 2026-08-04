@@ -43,7 +43,7 @@ import {
     downloadEnrollmentInvoice, downloadEnrollmentPaymentReceipt,
 } from '../controllers/manualEnrollmentController.js';
 import { getTxnTimelineHandler, listLogsHandler } from '../controllers/logController.js';
-import { getLiveUsersHandler } from '../controllers/analyticsController.js';
+import { getLiveUsersHandler, getAnalyticsOverviewHandler } from '../controllers/analyticsController.js';
 
 
 import {
@@ -81,6 +81,7 @@ router.patch('/profile', updateAdminProfile);
 
 router.get('/dashboard', getDashboard);
 router.get('/analytics/live-users', getLiveUsersHandler);
+router.get('/analytics/overview', getAnalyticsOverviewHandler);
 
 // NOTE: /search and /export must be registered BEFORE /:id or Express will
 // try to treat "search"/"export" as an :id param.
