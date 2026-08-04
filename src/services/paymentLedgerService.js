@@ -177,13 +177,17 @@ export async function listOutstandingBalances({ dueOnly = false } = {}) {
         .select('*')
         .is('deleted_at', null)
         .gt('balance_due', 0)
-        // A website checkout that was never completed also has balance_due
-        // > 0 (the full expected price, nothing paid) — but it's an
-        // abandoned cart, not a payment plan to follow up on, unlike a
-        // manually-created enrollment that intentionally starts at $0 paid.
-        // Exclude "never paid anything, came from the website" specifically;
-        // a manual entry in the same state still belongs in this list.
-        .or('source.neq.website,payment_status.neq.pending')
+        // A website checkout that was never completed — abandoned mid-
+        // checkout (pending), the payment itself failing at Razorpay
+        // (failed), or later reversed (refunded) — also ends up with
+        // balance_due > 0 (the full expected price, nothing collected).
+        // None of those are a payment plan to actively follow up on, unlike
+        // a manually-created enrollment that intentionally starts at $0
+        // paid, or a website enrollment that's genuinely mid-installment
+        // (payment_status stays 'paid' for a partial payment — only the
+        // amount differs). So: for website-sourced rows, only a currently
+        // 'paid' status belongs here; a manual entry in any status still does.
+        .or('source.neq.website,payment_status.eq.paid')
         .order('next_payment_reminder_at', { ascending: true });
 
     if (dueOnly) {
