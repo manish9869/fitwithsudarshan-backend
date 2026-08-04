@@ -584,16 +584,16 @@ export async function getDashboard(req, res) {
         if (e1 || e2 || e3 || e4 || e6 || e7) throw (e1 || e2 || e3 || e4 || e6 || e7);
 
         // Outstanding balance — excludes never-completed website checkouts
-        // (balance_due = full expected price, nothing paid — an abandoned
-        // cart, not money genuinely outstanding). A manual enrollment in the
-        // same $0-paid state is a deliberate entry and still counts. See the
-        // matching exclusion in listOutstandingBalances().
+        // (pending, failed, or refunded — none represent money genuinely
+        // outstanding, just an abandoned/unsuccessful/reversed attempt). A
+        // manual enrollment in any status is a deliberate entry and still
+        // counts. See the matching exclusion in listOutstandingBalances().
         const { data: balanceRows, error: eBal } = await supabase
             .from('enrollments')
             .select('balance_due')
             .is('deleted_at', null)
             .gt('balance_due', 0)
-            .or('source.neq.website,payment_status.neq.pending');
+            .or('source.neq.website,payment_status.eq.paid');
 
         if (eBal) throw eBal;
 
