@@ -84,3 +84,16 @@ alter table diet_foods add column if not exists serving_unit text;
 
 alter table diet_plans add column if not exists target_calories numeric;
 alter table diet_plans add column if not exists target_calories_manual boolean not null default false;
+
+-- ── v3: extended nutrition facts ────────────────────────────────────────────
+-- Adds the secondary nutrients present in the Indian Food Composition dataset
+-- used to rebuild diet_foods (sugar/fiber for everyday tracking; sodium/
+-- calcium/iron/vitamin C/folate for the food library's detail view). All per
+-- the same base serving_qty/serving_unit as calories/protein/carbs/fats.
+alter table diet_foods add column if not exists sugar numeric;
+alter table diet_foods add column if not exists fiber numeric;
+alter table diet_foods add column if not exists sodium numeric;
+alter table diet_foods add column if not exists calcium numeric;
+alter table diet_foods add column if not exists iron numeric;
+alter table diet_foods add column if not exists vitamin_c numeric;
+alter table diet_foods add column if not exists folate numeric;
