@@ -10,7 +10,16 @@
  */
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { getSignedFileUrl } from '../services/assessmentService.js';
+import { computePlanEndDate } from './manualEnrollmentController.js';
 import logger from '../config/logger.js';
+
+// Plans with this many days (or fewer) left are surfaced in the "Ending
+// Soon" dashboard insight. Matches the frontend's own `expiringSoon`
+// threshold in adminUtils.getLifecycleStatus() — keep both in sync.
+const ENDING_SOON_DAYS = 7;
+// How many "ending soon" rows to actually return to the dashboard; the
+// true count (for the KPI/badge) is reported separately as `total`.
+const ENDING_SOON_LIMIT = 8;
 
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_MAX = 100;
@@ -562,7 +571,7 @@ export async function getDashboard(req, res) {
 
             supabase
                 .from('enrollments')
-                .select('id, amount_paid, original_amount, coupon_savings, coupon_code, coaching_type, plan_type, duration_months, payment_status, created_at, customer_name, program_name, source')
+                .select('id, amount_paid, original_amount, coupon_savings, coupon_code, coaching_type, plan_type, duration_months, payment_status, created_at, customer_name, program_name, source, root_enrollment_id')
                 .is('deleted_at', null)
                 .gte('created_at', since)
                 .order('created_at', { ascending: true }),
@@ -572,8 +581,12 @@ export async function getDashboard(req, res) {
                 .is('deleted_at', null)
                 .gte('created_at', since)
                 .order('created_at', { ascending: true }),
-            supabase.from('enrollments').select('id', { count: 'exact', head: true }),
-            supabase.from('assessments').select('id', { count: 'exact', head: true }),
+            // BUG FIX: these two "all-time" counts previously had no
+            // .is('deleted_at', null) filter (every other query in this file
+            // does), so soft-deleted enrollments/assessments inflated the
+            // Lifetime Strip and KPI sub-labels.
+            supabase.from('enrollments').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+            supabase.from('assessments').select('id', { count: 'exact', head: true }).is('deleted_at', null),
             supabase
                 .from('diet_plans')
                 .select('id, enrollment_id, created_at')
@@ -612,6 +625,64 @@ export async function getDashboard(req, res) {
             .lte('next_followup_at', new Date().toISOString());
 
         const paidEnrollments = (enrollments || []).filter((e) => (e.payment_status || 'paid') === 'paid');
+
+        // ── Renewals + Ending Soon ───────────────────────────────────────────
+        // Deliberately NOT scoped to the `since` range — a plan started 11
+        // months ago that expires in 3 days must still surface here even
+        // when the dashboard is filtered to "7D". Renewals are modeled as
+        // brand-new rows chained via root_enrollment_id (see
+        // createEnrollmentExtension), not a counter column, so the "how many
+        // times has this client renewed" figure has to be derived by
+        // grouping every paid, non-deleted row into its chain.
+        const { data: activePlanRows, error: eActive } = await supabase
+            .from('enrollments')
+            .select('id, enrollment_id, root_enrollment_id, customer_name, program_name, plan_start_date, duration_months, payment_status, created_at')
+            .is('deleted_at', null)
+            .eq('payment_status', 'paid');
+        if (eActive) throw eActive;
+
+        const chains = new Map();
+        (activePlanRows || []).forEach((row) => {
+            const rootId = row.root_enrollment_id || row.id;
+            if (!chains.has(rootId)) chains.set(rootId, []);
+            chains.get(rootId).push(row);
+        });
+
+        let renewedAllTime = 0;
+        const endingSoonAll = [];
+        chains.forEach((rows) => {
+            const extensionsCount = rows.length - 1;
+            if (extensionsCount > 0) renewedAllTime += 1;
+
+            // The chain's current period is whichever row started most
+            // recently — for an extended chain that's always the latest
+            // extension, since each new period is chained onto the
+            // previous one's end date (never "today").
+            const current = rows.reduce((latest, r) => (
+                !latest || new Date(r.plan_start_date) > new Date(latest.plan_start_date) ? r : latest
+            ), null);
+
+            const end = current && computePlanEndDate(current.plan_start_date, current.duration_months);
+            if (!end) return;
+            const daysRemaining = Math.ceil((end.getTime() - Date.now()) / 86400000);
+            if (daysRemaining < 0 || daysRemaining > ENDING_SOON_DAYS) return;
+
+            endingSoonAll.push({
+                id: current.id,
+                enrollmentId: current.enrollment_id,
+                customerName: current.customer_name || 'Unknown',
+                programName: current.program_name || '',
+                endDate: end.toISOString(),
+                daysRemaining,
+                extensionsCount,
+                isRenewed: extensionsCount > 0,
+            });
+        });
+        endingSoonAll.sort((a, b) => a.daysRemaining - b.daysRemaining);
+
+        // Renewal *events* (extension rows) created within the selected
+        // range — same "InRange" convention as the other KPI cards.
+        const renewedInRange = paidEnrollments.filter((e) => e.root_enrollment_id).length;
 
         // ── KPIs ──────────────────────────────────────────────────────────────
         const totalRevenue = paidEnrollments.reduce((sum, e) => sum + (Number(e.amount_paid) || 0), 0);
@@ -757,6 +828,9 @@ export async function getDashboard(req, res) {
                 dietPlansInRange,
                 dietPlansLinkedInRange,
                 totalDietPlansAllTime: totalDietPlans || 0,
+                renewedInRange,
+                renewedAllTime,
+                endingSoonCount: endingSoonAll.length,
             },
             charts: {
                 revenueTrend,
@@ -767,6 +841,7 @@ export async function getDashboard(req, res) {
                 revenueByCoachingType,
                 enrollmentSourceSplit,
             },
+            endingSoon: endingSoonAll.slice(0, ENDING_SOON_LIMIT),
             recentActivity,
         });
     } catch (err) {

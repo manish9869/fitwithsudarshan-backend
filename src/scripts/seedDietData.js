@@ -1,6 +1,6 @@
 // src/scripts/seedDietData.js
 // One-off seed for the Diet Plan Generator's reference library (diet_foods,
-// diet_exercises). Run once after creating the tables from diet_schema.sql:
+// diet_exercises). Run once after creating the tables from schema.sql:
 //   node src/scripts/seedDietData.js
 // Safe to re-run — upserts on `id`, never duplicates rows.
 import dotenv from 'dotenv';
