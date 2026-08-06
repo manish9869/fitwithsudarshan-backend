@@ -17,13 +17,43 @@ import { generateInvoiceBuffer } from '../services/invoiceService.js';
 import { toTitleCase } from '../utils/textFormat.js';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
+// When an extension's program name isn't explicitly given, falling back to
+// the SOURCE row's name verbatim would silently carry over a stale duration
+// ("... — 1 Month" showing on a 3-month extension) — this re-derives it
+// against the new duration instead. Only rewrites program names that follow
+// this app's own "... — N Month(s)" convention (what every auto-suggested
+// name looks like); anything else is left as-is rather than guessed at.
+function withCurrentDuration(baseName, durationMonths) {
+    if (!baseName) return baseName;
+    if (!durationMonths) return baseName;
+    const match = baseName.match(/^(.*?)(\s*[—-]\s*)\d+\s*Months?\s*$/i);
+    if (!match) return baseName; // didn't match the pattern — leave untouched
+    const [, stripped, separator] = match;
+    const label = `${durationMonths} Month${Number(durationMonths) > 1 ? 's' : ''}`;
+    return `${stripped.trim()}${separator}${label}`;
+}
+
 function generateEnrollmentId() {
     const year = new Date().getFullYear();
     const random = Math.floor(100000 + Math.random() * 900000);
     return `FIT-${year}-${random}`;
 }
 
-function toTemplateData(row) {
+// Async because manual/extension payments never populate
+// enrollments.razorpay_payment_id (that column is website-checkout-only) —
+// their real reference (UPI ref, bank UTR…) lives on the ledger row instead.
+// Falling back to the latest recorded payment's reference means the coach/
+// customer emails show the actual reference the admin typed in, instead of
+// a blank "—" for every manually-recorded or extended enrollment.
+async function toTemplateData(row) {
+    let referenceId = row.razorpay_payment_id;
+    if (!referenceId) {
+        try {
+            const payments = await getPaymentsForEnrollment(row.id);
+            referenceId = payments.length ? payments[payments.length - 1].reference : null;
+        } catch (_) { /* best-effort — falls through to null */ }
+    }
+
     return {
         enrollmentId: row.enrollment_id,
         customerName: row.customer_name,
@@ -38,7 +68,7 @@ function toTemplateData(row) {
         couponCode: row.coupon_code,
         couponSavings: row.coupon_savings,
         razorpayOrderId: row.razorpay_order_id,
-        razorpayPaymentId: row.razorpay_payment_id,
+        razorpayPaymentId: referenceId,
         paymentDate: row.payment_date,
         goals: row.goals,
         partnerGoals: row.partner_goals,
@@ -196,7 +226,7 @@ export async function createEnrollmentExtension(req, res) {
 
             // The new period's own plan/pricing — falls back to the source's
             // values so the admin only has to type what's actually changing.
-            program_name: b.programName || source.program_name,
+            program_name: b.programName || withCurrentDuration(source.program_name, b.durationMonths || source.duration_months),
             plan_type: b.planType || source.plan_type,
             coaching_type: b.coachingType || source.coaching_type,
             duration_months: b.durationMonths || source.duration_months,
@@ -248,8 +278,13 @@ export async function createEnrollmentExtension(req, res) {
 }
 
 // ── GET /api/admin/enrollments/:id/history ────────────────────────────────────
-// Every period belonging to the same customer — the original enrollment plus
-// any extensions — as one flat, chronologically-ordered list. Each row
+// Every period belonging to the same customer as one flat, chronologically-
+// ordered list. Matched by contact info (email/phone) rather than just the
+// root_enrollment_id chain — root_enrollment_id only exists for rows created
+// via "Extend Plan", so chain-only matching would miss a customer's older,
+// pre-existing enrollments (a prior website signup, an earlier manual entry)
+// that were never linked to anything. Contact-based matching finds all of
+// them immediately, with no backfill needed for existing data. Each row
 // already carries its own correct amount_paid/balance_due/payment_plan_status
 // (maintained per-row by the existing ledger machinery), so this is just a
 // grouping query, not a computation.
@@ -257,15 +292,19 @@ export async function getEnrollmentHistory(req, res) {
     try {
         const supabase = getSupabaseAdmin();
         const { data: row, error: rowErr } = await supabase
-            .from('enrollments').select('id, root_enrollment_id').eq('id', req.params.id).single();
+            .from('enrollments').select('id, customer_email, customer_phone').eq('id', req.params.id).single();
         if (rowErr || !row) return res.status(404).json({ error: 'Enrollment not found.' });
 
-        const root = row.root_enrollment_id || row.id;
+        const clean = (v) => v.replace(/[%,()]/g, '');
+        const conditions = [`id.eq.${row.id}`];
+        if (row.customer_email) conditions.push(`customer_email.eq.${clean(row.customer_email)}`);
+        if (row.customer_phone) conditions.push(`customer_phone.eq.${clean(row.customer_phone)}`);
+
         const { data, error } = await supabase
             .from('enrollments')
             .select('*')
             .is('deleted_at', null)
-            .or(`id.eq.${root},root_enrollment_id.eq.${root}`)
+            .or(conditions.join(','))
             .order('created_at', { ascending: true });
         if (error) throw error;
 
@@ -453,7 +492,7 @@ export async function sendBalanceReminder(req, res) {
 
         const transporter = getTransporter();
         const coachEmail = config.email.coachEmail || config.email.gmailUser;
-        const { subject, html } = renderTemplate('balance_due_reminder', toTemplateData(row));
+        const { subject, html } = renderTemplate('balance_due_reminder', await toTemplateData(row));
 
         await transporter.sendMail({
             from: `"RECODE™ by FitWithSudarshan" <${config.email.gmailUser}>`,
@@ -678,7 +717,7 @@ export async function sendEnrollmentEmail(req, res) {
         }
 
         const transporter = getTransporter();
-        const templateData = toTemplateData(row);
+        const templateData = await toTemplateData(row);
         const coachEmail = config.email.coachEmail || config.email.gmailUser;
         const sent = [];
 
