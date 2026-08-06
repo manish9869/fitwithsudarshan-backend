@@ -15,22 +15,36 @@ import { fetchPdfAttachment, DEFAULT_RESOURCE_VAULT_PDF_URL } from '../services/
 import { generatePaymentReceiptBuffer } from '../services/paymentReceiptService.js';
 import { generateInvoiceBuffer } from '../services/invoiceService.js';
 import { toTitleCase } from '../utils/textFormat.js';
+import { listRows } from '../services/contentService.js';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-// When an extension's program name isn't explicitly given, falling back to
-// the SOURCE row's name verbatim would silently carry over a stale duration
-// ("... — 1 Month" showing on a 3-month extension) — this re-derives it
-// against the new duration instead. Only rewrites program names that follow
-// this app's own "... — N Month(s)" convention (what every auto-suggested
-// name looks like); anything else is left as-is rather than guessed at.
-function withCurrentDuration(baseName, durationMonths) {
-    if (!baseName) return baseName;
-    if (!durationMonths) return baseName;
-    const match = baseName.match(/^(.*?)(\s*[—-]\s*)\d+\s*Months?\s*$/i);
-    if (!match) return baseName; // didn't match the pattern — leave untouched
-    const [, stripped, separator] = match;
-    const label = `${durationMonths} Month${Number(durationMonths) > 1 ? 's' : ''}`;
-    return `${stripped.trim()}${separator}${label}`;
+// Program name is always computer-generated from the coaching type/plan
+// type/duration, never freehand-typed — that's the "fixed format" this
+// exists for. Previously the admin could type (or leave blank and
+// auto-fill) an arbitrary name, which meant an edit or extension could
+// silently end up with a name describing the WRONG duration (fixed once
+// already with a regex patch — this replaces that patch with the real fix:
+// don't accept freehand text for this field at all).
+async function buildProgramName(coachingType, planType, durationMonths) {
+    const [coachingTypes, durations] = await Promise.all([
+        listRows('coaching_types'),
+        listRows('durations'),
+    ]);
+    const ct = coachingTypes.find((c) => c.id === coachingType);
+    const dur = durations.find((d) => String(d.months) === String(durationMonths));
+    const planLabel = planType === 'couple' ? 'Couple' : 'Individual';
+    const parts = [ct?.name || 'RECODE Coaching', planLabel];
+    if (dur?.label) parts.push(dur.label);
+    return parts.join(' — ');
+}
+
+// End date of a plan period, or null if there isn't enough data to compute
+// one (old rows created before plan_start_date existed).
+function computePlanEndDate(planStartDate, durationMonths) {
+    if (!planStartDate || !durationMonths) return null;
+    const end = new Date(planStartDate);
+    end.setMonth(end.getMonth() + Number(durationMonths));
+    return end;
 }
 
 function generateEnrollmentId() {
@@ -96,8 +110,8 @@ export const ENROLLMENT_EMAIL_TEMPLATES = {
 export async function createManualEnrollment(req, res) {
     try {
         const b = req.body || {};
-        if (!b.customerName || !b.programName || b.totalAmount == null) {
-            return res.status(400).json({ error: 'customerName, programName and totalAmount are required.' });
+        if (!b.customerName || b.totalAmount == null) {
+            return res.status(400).json({ error: 'customerName and totalAmount are required.' });
         }
 
         const supabase = getSupabaseAdmin();
@@ -106,18 +120,22 @@ export async function createManualEnrollment(req, res) {
         const initialPayment = b.initialPaymentAmount != null && b.initialPaymentAmount !== ''
             ? Number(b.initialPaymentAmount)
             : totalAmount;
+        const planType = b.planType || 'individual';
+        const coachingType = b.coachingType || 'online';
+        const durationMonths = b.durationMonths || null;
+        const programName = await buildProgramName(coachingType, planType, durationMonths);
 
         const row = {
             enrollment_id: generateEnrollmentId(),
             customer_name: toTitleCase(b.customerName),
             customer_email: b.customerEmail || null,
             customer_phone: b.customerPhone || null,
-            program_name: b.programName,
-            plan_type: b.planType || 'individual',
-            coaching_type: b.coachingType || 'online',
-            duration_months: b.durationMonths || null,
+            program_name: programName,
+            plan_type: planType,
+            coaching_type: coachingType,
+            duration_months: durationMonths,
             amount_paid: 0,
-            original_amount: b.originalAmount != null ? Number(b.originalAmount) : totalAmount,
+            original_amount: totalAmount,
             total_amount: totalAmount,
             balance_due: totalAmount,
             payment_plan_status: 'pending',
@@ -202,6 +220,26 @@ export async function createEnrollmentExtension(req, res) {
             ? Number(b.initialPaymentAmount)
             : totalAmount;
 
+        // The new period's coverage starts the moment the SOURCE plan's own
+        // coverage ends — not "today" — so extending a couple of days early
+        // (the common case: renewing before it lapses) doesn't eat into
+        // days the client already paid for. Only falls back to the payment
+        // date itself if the source has already lapsed (nothing to chain
+        // onto) or predates plan_start_date tracking.
+        const sourceEndDate = computePlanEndDate(source.plan_start_date, source.duration_months);
+        const planStartDate = sourceEndDate && sourceEndDate.getTime() > new Date(paymentDate).getTime()
+            ? sourceEndDate.toISOString()
+            : paymentDate;
+
+        // Falls back to the source's own plan/coaching type when the admin
+        // only changed the duration — but the name itself is always
+        // computer-generated, same as a brand-new enrollment (see
+        // buildProgramName above), never carried over as freehand text.
+        const planType = b.planType || source.plan_type;
+        const coachingType = b.coachingType || source.coaching_type;
+        const durationMonths = b.durationMonths || source.duration_months;
+        const programName = await buildProgramName(coachingType, planType, durationMonths);
+
         const row = {
             enrollment_id: generateEnrollmentId(),
             root_enrollment_id: source.root_enrollment_id || source.id,
@@ -224,14 +262,13 @@ export async function createEnrollmentExtension(req, res) {
             partner_medical_issue: source.partner_medical_issue,
             partner_medical_note: source.partner_medical_note,
 
-            // The new period's own plan/pricing — falls back to the source's
-            // values so the admin only has to type what's actually changing.
-            program_name: b.programName || withCurrentDuration(source.program_name, b.durationMonths || source.duration_months),
-            plan_type: b.planType || source.plan_type,
-            coaching_type: b.coachingType || source.coaching_type,
-            duration_months: b.durationMonths || source.duration_months,
+            // The new period's own plan/pricing.
+            program_name: programName,
+            plan_type: planType,
+            coaching_type: coachingType,
+            duration_months: durationMonths,
             amount_paid: 0,
-            original_amount: b.originalAmount != null ? Number(b.originalAmount) : totalAmount,
+            original_amount: totalAmount,
             total_amount: totalAmount,
             balance_due: totalAmount,
             payment_plan_status: 'pending',
@@ -240,7 +277,7 @@ export async function createEnrollmentExtension(req, res) {
             razorpay_order_id: null,
             razorpay_payment_id: null,
             payment_date: null,
-            plan_start_date: paymentDate,
+            plan_start_date: planStartDate,
             payment_status: 'pending',
             source: 'manual',
             payment_method: b.paymentMethod || 'other',
@@ -319,8 +356,8 @@ export async function getEnrollmentHistory(req, res) {
 export async function updateManualEnrollment(req, res) {
     try {
         const b = req.body || {};
-        if (!b.customerName || !b.programName || b.totalAmount == null) {
-            return res.status(400).json({ error: 'customerName, programName and totalAmount are required.' });
+        if (!b.customerName || b.totalAmount == null) {
+            return res.status(400).json({ error: 'customerName and totalAmount are required.' });
         }
 
         const supabase = getSupabaseAdmin();
@@ -328,16 +365,21 @@ export async function updateManualEnrollment(req, res) {
             .from('enrollments').select('id').eq('id', req.params.id).single();
         if (fetchErr || !existing) return res.status(404).json({ error: 'Enrollment not found.' });
 
+        const planType = b.planType || 'individual';
+        const coachingType = b.coachingType || 'online';
+        const durationMonths = b.durationMonths || null;
+        const totalAmount = Number(b.totalAmount);
+
         const update = {
             customer_name: toTitleCase(b.customerName),
             customer_email: b.customerEmail || null,
             customer_phone: b.customerPhone || null,
-            program_name: b.programName,
-            plan_type: b.planType || 'individual',
-            coaching_type: b.coachingType || 'online',
-            duration_months: b.durationMonths || null,
-            total_amount: Number(b.totalAmount),
-            original_amount: b.originalAmount != null ? Number(b.originalAmount) : Number(b.totalAmount),
+            program_name: await buildProgramName(coachingType, planType, durationMonths),
+            plan_type: planType,
+            coaching_type: coachingType,
+            duration_months: durationMonths,
+            total_amount: totalAmount,
+            original_amount: totalAmount,
             coupon_code: b.couponCode || null,
             coupon_savings: b.couponSavings ? Number(b.couponSavings) : 0,
             age: b.age || null,
