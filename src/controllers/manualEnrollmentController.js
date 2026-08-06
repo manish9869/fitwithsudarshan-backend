@@ -39,8 +39,10 @@ async function buildProgramName(coachingType, planType, durationMonths) {
 }
 
 // End date of a plan period, or null if there isn't enough data to compute
-// one (old rows created before plan_start_date existed).
-function computePlanEndDate(planStartDate, durationMonths) {
+// one (old rows created before plan_start_date existed). Exported so the
+// dashboard (adminDataController.getDashboard) can compute the same
+// "ending soon" / renewal-chain logic without duplicating it.
+export function computePlanEndDate(planStartDate, durationMonths) {
     if (!planStartDate || !durationMonths) return null;
     const end = new Date(planStartDate);
     end.setMonth(end.getMonth() + Number(durationMonths));
