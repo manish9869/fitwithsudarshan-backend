@@ -26,6 +26,7 @@ function readTemplate(name) {
 
 const KNOWN_TEMPLATES = [
     'enrollment_coach', 'enrollment_customer', 'welcome',
+    'enrollment_extended_coach', 'enrollment_extended_customer',
     'payment_failed', 'payment_reminder',
     'contact_inquiry_coach', 'contact_inquiry_customer',
     'assessment_coach', 'assessment_customer', 'balance_due_reminder',
@@ -150,6 +151,51 @@ const templateBuilders = {
             customerGoals: formatGoals(d.goals),
             paymentDate: fmtDate(d.paymentDate),
             razorpayPaymentId: d.razorpayPaymentId || '—',
+        });
+        return { subject, html };
+    },
+
+    enrollment_extended_coach(d) {
+        const subject = `🎉 Plan Extended — ${d.customerName} · ${d.enrollmentId}`;
+        const couponSavingsFormatted = d.couponSavings > 0 ? fmt(d.couponSavings) : '';
+        const html = inject(readTemplate('enrollment_extended_coach'), {
+            customerName: d.customerName || '—',
+            customerEmail: d.customerEmail || '—',
+            customerPhone: d.customerPhone || '—',
+            customerPhoneClean: (d.customerPhone || '').replace(/\D/g, ''),
+            programName: d.programName || '—',
+            coachingType: d.coachingType || '—',
+            planTypeLabel: d.planType === 'couple' ? 'Couple' : 'Individual',
+            durationLabel: d.durationMonths ? `${d.durationMonths} Month${d.durationMonths > 1 ? 's' : ''}` : '—',
+            enrollmentId: d.enrollmentId || '—',
+            amountFormatted: fmt(d.amountPaid),
+            originalAmount: fmt(d.originalAmount || d.amountPaid),
+            couponCode: d.couponCode || '',
+            couponSavings: couponSavingsFormatted,
+            hasCoupon: !!(d.couponCode && d.couponSavings > 0),
+            razorpayPaymentId: d.razorpayPaymentId || '—',
+            paymentDate: fmtDate(d.paymentDate),
+        });
+        return { subject, html };
+    },
+
+    enrollment_extended_customer(d) {
+        const firstName = (d.customerName || 'there').split(' ')[0];
+        const durationLabel = d.durationMonths ? `${d.durationMonths} Month${d.durationMonths > 1 ? 's' : ''}` : 'more time';
+        const subject = `🎉 Your RECODE™ plan has been extended — ${durationLabel} added`;
+        const couponSavingsFormatted = d.couponSavings > 0 ? fmt(d.couponSavings) : '';
+        const html = inject(readTemplate('enrollment_extended_customer'), {
+            firstName,
+            programName: d.programName || '—',
+            durationLabel,
+            planTypeLabel: d.planType === 'couple' ? 'Couple Plan' : 'Individual',
+            enrollmentId: d.enrollmentId || '—',
+            amountFormatted: fmt(d.amountPaid),
+            originalAmount: fmt(d.originalAmount || d.amountPaid),
+            couponCode: d.couponCode || '',
+            couponSavings: couponSavingsFormatted,
+            hasCoupon: !!(d.couponCode && d.couponSavings > 0),
+            paymentDate: fmtDate(d.paymentDate),
         });
         return { subject, html };
     },

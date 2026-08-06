@@ -55,6 +55,8 @@ export const ENROLLMENT_EMAIL_TEMPLATES = {
     payment_failed: { recipient: 'customer', label: 'Payment Failed Notice' },
     balance_due_reminder: { recipient: 'customer', label: 'Balance Due Reminder' },
     enrollment_coach: { recipient: 'coach', label: 'New Enrollment Alert (Coach)' },
+    enrollment_extended_customer: { recipient: 'customer', label: 'Plan Extended (Customer)' },
+    enrollment_extended_coach: { recipient: 'coach', label: 'Plan Extended Alert (Coach)' },
 };
 
 // ── POST /api/admin/enrollments/manual ───────────────────────────────────────
@@ -94,6 +96,7 @@ export async function createManualEnrollment(req, res) {
             razorpay_order_id: null,
             razorpay_payment_id: null,
             payment_date: null,
+            plan_start_date: paymentDate,
             payment_status: 'pending',
             age: b.age || null,
             city: b.city || null,
@@ -139,6 +142,137 @@ export async function createManualEnrollment(req, res) {
     } catch (err) {
         logger.error(`[admin] createManualEnrollment failed: ${err.message}`);
         return res.status(500).json({ error: 'Failed to create manual enrollment.' });
+    }
+}
+
+// ── POST /api/admin/enrollments/:id/extend ────────────────────────────────────
+// Adds a new plan period on top of an existing enrollment (e.g. +3 months
+// after the original 1-month plan). Deliberately creates a brand-new
+// `enrollments` row rather than mutating the source row in place: every
+// invoice/receipt is generated from the LIVE row at download time, so
+// editing duration/amount in place would retroactively change what the
+// ORIGINAL period's already-issued receipts show. Linked back via
+// root_enrollment_id so the two (or more) periods can be listed together
+// as one customer's history — see getEnrollmentHistory below.
+export async function createEnrollmentExtension(req, res) {
+    try {
+        const b = req.body || {};
+        if (b.totalAmount == null) {
+            return res.status(400).json({ error: 'totalAmount is required.' });
+        }
+
+        const supabase = getSupabaseAdmin();
+        const { data: source, error: srcErr } = await supabase
+            .from('enrollments').select('*').eq('id', req.params.id).is('deleted_at', null).single();
+        if (srcErr || !source) return res.status(404).json({ error: 'Enrollment not found.' });
+
+        const paymentDate = b.paymentDate ? new Date(b.paymentDate).toISOString() : new Date().toISOString();
+        const totalAmount = Number(b.totalAmount);
+        const initialPayment = b.initialPaymentAmount != null && b.initialPaymentAmount !== ''
+            ? Number(b.initialPaymentAmount)
+            : totalAmount;
+
+        const row = {
+            enrollment_id: generateEnrollmentId(),
+            root_enrollment_id: source.root_enrollment_id || source.id,
+
+            // Carried forward from the source enrollment — the client isn't
+            // re-entering their own details for a plan they already have.
+            customer_name: source.customer_name,
+            customer_email: source.customer_email,
+            customer_phone: source.customer_phone,
+            age: source.age,
+            city: source.city,
+            weight: source.weight,
+            goals: source.goals,
+            medical_issue: source.medical_issue,
+            medical_note: source.medical_note,
+            partner_name: source.partner_name,
+            partner_age: source.partner_age,
+            partner_weight: source.partner_weight,
+            partner_goals: source.partner_goals,
+            partner_medical_issue: source.partner_medical_issue,
+            partner_medical_note: source.partner_medical_note,
+
+            // The new period's own plan/pricing — falls back to the source's
+            // values so the admin only has to type what's actually changing.
+            program_name: b.programName || source.program_name,
+            plan_type: b.planType || source.plan_type,
+            coaching_type: b.coachingType || source.coaching_type,
+            duration_months: b.durationMonths || source.duration_months,
+            amount_paid: 0,
+            original_amount: b.originalAmount != null ? Number(b.originalAmount) : totalAmount,
+            total_amount: totalAmount,
+            balance_due: totalAmount,
+            payment_plan_status: 'pending',
+            coupon_code: b.couponCode || null,
+            coupon_savings: b.couponSavings ? Number(b.couponSavings) : 0,
+            razorpay_order_id: null,
+            razorpay_payment_id: null,
+            payment_date: null,
+            plan_start_date: paymentDate,
+            payment_status: 'pending',
+            source: 'manual',
+            payment_method: b.paymentMethod || 'other',
+            admin_note: b.adminNote || null,
+            followup_status: 'active',
+            next_followup_at: new Date(new Date(paymentDate).getTime() + SEVEN_DAYS_MS).toISOString(),
+        };
+
+        let { data, error } = await supabase.from('enrollments').insert([row]).select().single();
+        if (error?.code === '23505') {
+            row.enrollment_id = generateEnrollmentId();
+            ({ data, error } = await supabase.from('enrollments').insert([row]).select().single());
+        }
+        if (error) throw error;
+
+        let final = data;
+        if (initialPayment > 0) {
+            final = await recordPayment({
+                enrollmentId: data.id,
+                amount: initialPayment,
+                method: b.paymentMethod || 'other',
+                reference: b.paymentReference || null,
+                note: b.adminNote || null,
+                recordedBy: req.admin.id,
+                paidAt: paymentDate,
+            });
+        }
+
+        logger.info(`[admin] ${req.admin.username} extended ${source.enrollment_id} → ${final.enrollment_id}`);
+        return res.status(201).json({ enrollment: final });
+    } catch (err) {
+        logger.error(`[admin] createEnrollmentExtension failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to extend enrollment.' });
+    }
+}
+
+// ── GET /api/admin/enrollments/:id/history ────────────────────────────────────
+// Every period belonging to the same customer — the original enrollment plus
+// any extensions — as one flat, chronologically-ordered list. Each row
+// already carries its own correct amount_paid/balance_due/payment_plan_status
+// (maintained per-row by the existing ledger machinery), so this is just a
+// grouping query, not a computation.
+export async function getEnrollmentHistory(req, res) {
+    try {
+        const supabase = getSupabaseAdmin();
+        const { data: row, error: rowErr } = await supabase
+            .from('enrollments').select('id, root_enrollment_id').eq('id', req.params.id).single();
+        if (rowErr || !row) return res.status(404).json({ error: 'Enrollment not found.' });
+
+        const root = row.root_enrollment_id || row.id;
+        const { data, error } = await supabase
+            .from('enrollments')
+            .select('*')
+            .is('deleted_at', null)
+            .or(`id.eq.${root},root_enrollment_id.eq.${root}`)
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+
+        return res.json({ rows: data || [] });
+    } catch (err) {
+        logger.error(`[admin] getEnrollmentHistory failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to load enrollment history.' });
     }
 }
 
