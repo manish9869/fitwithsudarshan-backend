@@ -54,6 +54,7 @@ export async function handleRazorpayWebhook(req, res) {
                 razorpay_payment_id: paymentId,
                 amount_paid: payment.amount / 100,
                 payment_date: new Date(payment.created_at * 1000).toISOString(),
+                plan_start_date: new Date(payment.created_at * 1000).toISOString(),
                 next_followup_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             })
             .eq('razorpay_order_id', orderId)

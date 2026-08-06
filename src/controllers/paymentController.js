@@ -192,6 +192,10 @@ export async function confirmPayment(req, res, next) {
                 amount_paid: payment.amount / 100,
                 razorpay_payment_id: pid,
                 payment_date: new Date(payment.created_at * 1000).toISOString(),
+                // Set once, never touched again — the stable anchor lifecycle
+                // status (active/expired) is computed from. Distinct from
+                // payment_date, which can move if a row is later corrected.
+                plan_start_date: new Date(payment.created_at * 1000).toISOString(),
                 total_amount: payment.amount / 100, balance_due: 0,
                 payment_plan_status: 'full',
                 payment_status: 'paid',

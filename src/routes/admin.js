@@ -41,6 +41,7 @@ import {
     sendBalanceReminder,
     sendPaymentReceiptEmail, deleteManualEnrollment,
     downloadEnrollmentInvoice, downloadEnrollmentPaymentReceipt,
+    createEnrollmentExtension, getEnrollmentHistory,
 } from '../controllers/manualEnrollmentController.js';
 import { getTxnTimelineHandler, listLogsHandler } from '../controllers/logController.js';
 import { getLiveUsersHandler, getAnalyticsOverviewHandler } from '../controllers/analyticsController.js';
@@ -123,6 +124,8 @@ router.post('/enrollments/:id/payments', addEnrollmentPayment);
 router.post('/enrollments/:id/payments/:paymentId/send-receipt', sendPaymentReceiptEmail);
 router.get('/enrollments/:id/invoice', downloadEnrollmentInvoice);
 router.get('/enrollments/:id/payments/:paymentId/receipt', downloadEnrollmentPaymentReceipt);
+router.post('/enrollments/:id/extend', createEnrollmentExtension);
+router.get('/enrollments/:id/history', getEnrollmentHistory);
 router.get('/balance-due', listBalanceDue);
 router.post('/enrollments/:id/send-balance-reminder', sendBalanceReminder);
 
