@@ -737,7 +737,7 @@ export async function sendEnrollmentEmail(req, res) {
                 }
             }
 
-            await transporter.sendMail({
+            const info = await transporter.sendMail({
                 from: `"RECODE™ by FitWithSudarshan" <${config.email.gmailUser}>`,
                 to: recipient,
                 replyTo: coachEmail,
@@ -745,6 +745,11 @@ export async function sendEnrollmentEmail(req, res) {
                 html,
                 attachments,
             });
+            // Gmail's SMTP layer can accept a send (no thrown error) and still
+            // report a per-recipient rejection — log both so a "customer never
+            // got it" report can be checked against what Gmail actually did,
+            // instead of only knowing "the API call didn't throw."
+            logger.info(`[admin] ${tmpl} → ${recipient} — accepted=[${info.accepted?.join(', ') || ''}] rejected=[${info.rejected?.join(', ') || ''}] messageId=${info.messageId}`);
             sent.push(tmpl);
         }
 
