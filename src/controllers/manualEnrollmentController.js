@@ -779,6 +779,24 @@ export async function sendEnrollmentEmail(req, res) {
                     // Re-render with hasAttachment so the "PDF attached" note shows correctly
                     html = renderTemplate(tmpl, { ...templateData, hasAttachment: true }).html;
                 }
+            } else if (tmpl === 'enrollment_customer') {
+                // FIX: the automatic post-checkout confirmation email
+                // (sendEnrollmentConfirmation in paymentController.js)
+                // always attaches the invoice — this manually-triggered
+                // path (used for every manual enrollment, since those never
+                // go through the checkout flow at all, plus any admin
+                // resend) never did. Best-effort: a PDF failure shouldn't
+                // block the confirmation email itself from going out.
+                try {
+                    const buffer = await generateInvoiceBuffer(templateData);
+                    attachments = [{
+                        filename: `RECODE-Invoice-${row.enrollment_id}.pdf`,
+                        content: buffer,
+                        contentType: 'application/pdf',
+                    }];
+                } catch (e) {
+                    logger.warn(`[admin] invoice generation failed for ${row.enrollment_id} (send-email): ${e.message}`);
+                }
             }
 
             const info = await transporter.sendMail({
