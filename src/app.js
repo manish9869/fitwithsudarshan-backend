@@ -31,12 +31,15 @@ app.use(compressionMiddleware);
 // real webhook call. Skip JSON/urlencoded parsing for that one path.
 //
 // 10kb is deliberately tight for every other route (small forms — coupons,
-// pricing rows, site_content blobs). Diet plans are the one payload shape
-// that's legitimately much bigger (many days x meals x foods), so they get
-// their own higher limit instead of loosening it for every admin route.
+// pricing rows). Diet plans and the generic content table (which also
+// carries blog_posts.content — full article HTML) are payload shapes that
+// are legitimately much bigger, so they get their own higher limit instead
+// of loosening it for every admin route.
 app.use((req, res, next) => {
     if (req.originalUrl === '/api/webhooks/razorpay') return next();
-    const limit = req.originalUrl.startsWith('/api/admin/diet-plans') ? '2mb' : '10kb';
+    const needsHigherLimit = req.originalUrl.startsWith('/api/admin/diet-plans')
+        || req.originalUrl.startsWith('/api/admin/content');
+    const limit = needsHigherLimit ? '2mb' : '10kb';
     express.json({ limit })(req, res, next);
 });
 app.use((req, res, next) => {
