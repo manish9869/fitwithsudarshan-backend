@@ -32,6 +32,58 @@ const CHANNEL_LABELS = {
     'Email': 'Email', 'Unassigned': 'Other',
 };
 
+// Admin panel navigation stopped firing page_view events at the source
+// (useAnalyticsPageview.js), but historical data already collected before
+// that fix still has /admin/* rows mixed in — filter it out of every
+// page-level report so it doesn't need 30+ days to age out on its own.
+// Coach/admin activity was never customer traffic worth reporting on here.
+const EXCLUDE_ADMIN_PAGES = {
+    notExpression: {
+        filter: { fieldName: 'pagePath', stringFilter: { matchType: 'BEGINS_WITH', value: '/admin' } },
+    },
+};
+
+// ── Section-level engagement (in-page scroll sections on the one-page
+// landing — Transformations, Pricing, etc.) ─────────────────────────────
+// GA4's page_view-based reporting has no visibility into which part of one
+// long single route someone was looking at; the frontend fills that gap
+// with a custom `section_engagement` event (see useSectionEngagement.js),
+// carrying `section_name`/`engaged_seconds` as event parameters.
+//
+// Those parameters only become queryable via the Data API — as
+// `customEvent:section_name` / `customEvent:engaged_seconds` — after
+// they're registered as Custom Definitions in the GA4 console (Admin →
+// Custom definitions). That's a one-time manual step outside this
+// codebase; until it's done, this query 400s. Run separately from the main
+// Promise.all() below (not inside it) so that failure returns an empty,
+// clearly-"not configured yet" result instead of taking down the whole
+// Analytics page.
+async function getSectionEngagement(client, property, dateRange) {
+    try {
+        const [resp] = await client.runReport({
+            property, dateRanges: dateRange,
+            dimensions: [{ name: 'customEvent:section_name' }],
+            metrics: [{ name: 'customEvent:engaged_seconds' }, { name: 'eventCount' }],
+            orderBys: [{ metric: { metricName: 'customEvent:engaged_seconds' }, desc: true }],
+            limit: 15,
+        });
+        const sections = (resp.rows || []).map((r) => {
+            const totalSeconds = metricValue(r, 0);
+            const events = metricValue(r, 1);
+            return {
+                section: dimValue(r, 0),
+                avgEngagementSeconds: events > 0 ? Math.round(totalSeconds / events) : 0,
+                views: events,
+            };
+        });
+        return { configured: true, sections };
+    } catch {
+        // Almost always means the custom dimension/metric hasn't been
+        // registered in the GA4 console yet — not a real failure.
+        return { configured: false, sections: [] };
+    }
+}
+
 export async function getAnalyticsOverview(days = 30) {
     assertGa4Configured();
 
@@ -42,7 +94,7 @@ export async function getAnalyticsOverview(days = 30) {
     const property = ga4PropertyPath();
     const dateRange = [{ startDate: `${days}daysAgo`, endDate: 'today' }];
 
-    const [totalsResp, seriesResp, pagesResp, channelsResp, devicesResp, countriesResp] = await Promise.all([
+    const [totalsResp, seriesResp, pagesResp, engagementResp, sectionEngagement, channelsResp, devicesResp, countriesResp] = await Promise.all([
         client.runReport({
             property, dateRanges: dateRange,
             metrics: [
@@ -61,8 +113,24 @@ export async function getAnalyticsOverview(days = 30) {
             dimensions: [{ name: 'pagePath' }],
             metrics: [{ name: 'screenPageViews' }],
             orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
+            dimensionFilter: EXCLUDE_ADMIN_PAGES,
             limit: 10,
         }),
+        // ── Time spent per page — GA4's userEngagementDuration is total
+        // foreground/active seconds attributed to a page, the same number
+        // GA4's own "Pages and screens" report divides by active users to
+        // get "average engagement time." Requires page_view to fire on
+        // every route change (it does, via AnalyticsTracker) — no GA4
+        // console setup needed, unlike custom-event-based tracking.
+        client.runReport({
+            property, dateRanges: dateRange,
+            dimensions: [{ name: 'pagePath' }],
+            metrics: [{ name: 'userEngagementDuration' }, { name: 'screenPageViews' }, { name: 'activeUsers' }],
+            orderBys: [{ metric: { metricName: 'userEngagementDuration' }, desc: true }],
+            dimensionFilter: EXCLUDE_ADMIN_PAGES,
+            limit: 15,
+        }),
+        getSectionEngagement(client, property, dateRange),
         client.runReport({
             property, dateRanges: dateRange,
             dimensions: [{ name: 'sessionDefaultChannelGroup' }],
@@ -107,6 +175,19 @@ export async function getAnalyticsOverview(days = 30) {
         views: metricValue(r, 0),
     }));
 
+    // avgEngagementSeconds = total engaged time on the page ÷ how many
+    // active users landed on it — the same math GA4's own UI uses for
+    // "average engagement time per active user" per page.
+    const timeOnPage = (engagementResp[0].rows || []).map((r) => {
+        const totalSeconds = metricValue(r, 0);
+        const users = metricValue(r, 2);
+        return {
+            path: dimValue(r, 0),
+            views: metricValue(r, 1),
+            avgEngagementSeconds: users > 0 ? Math.round(totalSeconds / users) : 0,
+        };
+    });
+
     const channels = (channelsResp[0].rows || []).map((r) => {
         const raw = dimValue(r, 0);
         return { channel: CHANNEL_LABELS[raw] || raw, sessions: metricValue(r, 0) };
@@ -122,7 +203,7 @@ export async function getAnalyticsOverview(days = 30) {
         users: metricValue(r, 0),
     }));
 
-    const result = { totals, series, topPages, channels, devices, countries, fetchedAt: new Date().toISOString() };
+    const result = { totals, series, topPages, timeOnPage, sectionEngagement, channels, devices, countries, fetchedAt: new Date().toISOString() };
     _cache.set(days, { data: result, ts: Date.now() });
     return result;
 }

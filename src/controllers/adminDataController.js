@@ -11,7 +11,6 @@
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { getSignedFileUrl } from '../services/assessmentService.js';
 import { computePlanEndDate } from './manualEnrollmentController.js';
-import { recomputeEnrollmentTotals } from '../services/paymentLedgerService.js';
 import logger from '../config/logger.js';
 
 // Plans with this many days (or fewer) left are surfaced in the "Ending
@@ -119,82 +118,51 @@ export async function getEnrollment(req, res) {
     }
 }
 
-// ── PATCH /api/admin/enrollments/:id/status ─────────────────────────────────
-// 'paid' is deliberately NOT in this list — it must only ever be set as a
-// side effect of money actually being recorded (recordPayment/
-// recomputeEnrollmentTotals, or the website checkout's confirmPayment/
-// webhook), never by hand-picking it here. This endpoint used to allow it,
-// which let an admin flip a ₹0-collected row straight to "Paid" — amount_paid
-// and balance_due stayed exactly as they were, so the row showed Paid while
-// simultaneously still counting as outstanding balance. Recovering from a
-// wrong failed/refunded now goes through Pending → Record Payment instead,
-// which is the only path that writes a correct amount_paid/balance_due.
-const VALID_ENROLLMENT_STATUSES = ['pending', 'failed', 'refunded'];
-export async function updateEnrollmentStatus(req, res) {
+// ── POST /api/admin/enrollments/:id/refund ───────────────────────────────────
+// The ONLY manual override of payment_status left — everything else is
+// derived automatically (Record Payment / recomputeEnrollmentTotals for
+// manual payments, confirmPayment/the webhook for the website checkout).
+// There used to be a general Pending/Failed/Refunded dropdown here too, but
+// none of those besides "refunded" have any legitimate manual use once
+// paid/pending/failed are all system-derived — they only ever existed to
+// let an admin correct a status, and every one of those corrections is
+// better made by fixing the actual payment record instead. Refunding can't
+// be derived from anything: nothing else in the app ever knows "the admin
+// already sent this money back outside the system" except this action
+// itself, so it stays manual, deliberate, and confirm-gated on the frontend.
+//
+// Only callable on a currently-'paid' row (refunding something not paid
+// makes no sense), and only callable once — re-running it on an already-
+// refunded row would zero out amount_paid a second time no-op harmlessly,
+// but the frontend never offers the button once it's already refunded.
+export async function refundEnrollment(req, res) {
     try {
-        const { status } = req.body || {};
-        if (!VALID_ENROLLMENT_STATUSES.includes(status)) {
+        const supabase = getSupabaseAdmin();
+        const { data: existing, error: fetchErr } = await supabase
+            .from('enrollments').select('total_amount, amount_paid, payment_status').eq('id', req.params.id).maybeSingle();
+        if (fetchErr || !existing) return res.status(404).json({ error: 'Enrollment not found.' });
+
+        if ((existing.payment_status || 'paid') !== 'paid') {
             return res.status(400).json({
-                error: `Invalid status. Must be one of: ${VALID_ENROLLMENT_STATUSES.join(', ')} — 'paid' can only be set by recording an actual payment.`,
+                error: `Only a paid enrollment can be refunded (this one is ${existing.payment_status}).`,
             });
         }
-        const supabase = getSupabaseAdmin();
 
-        const update = { payment_status: status };
-        // Marking something failed/refunded means the money is no longer
-        // actually held — zero amount_paid so revenue totals (dashboard,
-        // enrollments list, manual list) stop counting it, and restore the
-        // balance so a follow-up/retry starts from the full amount owed.
-        // Previously this endpoint only ever flipped the status label,
-        // leaving amount_paid/balance_due frozen at whatever they were —
-        // that's exactly how a real enrollment ended up permanently
-        // inflating revenue after being marked "failed" post-payment.
-        if (status === 'failed' || status === 'refunded') {
-            const { data: existing } = await supabase
-                .from('enrollments').select('total_amount, amount_paid').eq('id', req.params.id).maybeSingle();
-            const total = Number(existing?.total_amount ?? existing?.amount_paid ?? 0);
-            update.amount_paid = 0;
-            update.balance_due = total;
-            update.payment_plan_status = 'pending';
-        }
-
+        const total = Number(existing.total_amount ?? existing.amount_paid ?? 0);
         const { data, error } = await supabase
             .from('enrollments')
-            .update(update)
+            .update({ payment_status: 'refunded', amount_paid: 0, balance_due: total, payment_plan_status: 'pending' })
             .eq('id', req.params.id)
             .select()
             .single();
 
         if (error || !data) return res.status(404).json({ error: 'Enrollment not found.' });
 
-        logger.info(`[admin] ${req.admin.username} set enrollment ${data.enrollment_id} → ${status}`);
+        logger.info(`[admin] ${req.admin.username} marked enrollment ${data.enrollment_id} refunded`);
         return res.json({ enrollment: data });
     } catch (err) {
-        logger.error(`[admin] updateEnrollmentStatus failed: ${err.message}`);
-        return res.status(500).json({ error: 'Failed to update status.' });
-    }
-}
-
-// ── POST /api/admin/enrollments/:id/recompute-status ────────────────────────
-// The safe undo for "accidentally clicked Pending/Failed/Refunded on a row
-// that was actually already paid": re-derives payment_status/amount_paid/
-// balance_due straight from the SUM of what's actually on the payment
-// ledger (enrollment_payments) — not from a re-typed amount, and not by
-// hand-picking 'paid' again (still blocked by design in updateEnrollmentStatus).
-// Safe because the ledger itself is never touched by a status-dropdown
-// click, in either direction — a mis-click zeroes/changes the enrollments
-// row's summary fields, never the underlying payment records, so this
-// always recovers the true state. If the ledger genuinely sums to 0 (a
-// pending row with no payment ever recorded), this correctly leaves it
-// 'pending' rather than fabricating a paid status.
-export async function recomputeEnrollmentStatus(req, res) {
-    try {
-        const enrollment = await recomputeEnrollmentTotals(req.params.id);
-        logger.info(`[admin] ${req.admin.username} recomputed status for ${enrollment.enrollment_id} from the payment ledger`);
-        return res.json({ enrollment });
-    } catch (err) {
-        logger.error(`[admin] recomputeEnrollmentStatus failed: ${err.message}`);
-        return res.status(400).json({ error: err.message || 'Failed to recompute status.' });
+        logger.error(`[admin] refundEnrollment failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to mark enrollment refunded.' });
     }
 }
 
@@ -914,5 +882,169 @@ export async function getDashboard(req, res) {
     } catch (err) {
         logger.error(`[admin] getDashboard failed: ${err.message}`);
         return res.status(500).json({ error: 'Failed to load dashboard.' });
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DATA AUDIT — independent verification of every calculation shown elsewhere
+// ════════════════════════════════════════════════════════════════════════════
+// GET /api/admin/data-audit
+//
+// Every number this admin panel shows (revenue, balance due, Active/
+// Expiring/Expired counts…) is computed client-side from whatever rows the
+// frontend happens to have cached. This endpoint recomputes the same things
+// from a fresh, independent server-side pass over the raw tables — so if
+// the two ever disagree, that disagreement itself is the signal something's
+// wrong (a stale cache, a frontend bug, or bad underlying data), not
+// something you have to take on faith. Read-only — it flags problems, it
+// never fixes them, since every fix here needs a human decision (see
+// updatePlanStartDate / refundEnrollment / recordPayment for the actual
+// correction tools).
+const AMOUNT_SLACK = 1; // ₹1 — floating-point/rounding tolerance, not a real mismatch
+
+export async function getDataAudit(req, res) {
+    try {
+        const supabase = getSupabaseAdmin();
+
+        const [{ data: enrollments, error: eEnroll }, { data: payments, error: ePay }] = await Promise.all([
+            supabase
+                .from('enrollments')
+                .select('id, enrollment_id, customer_name, customer_email, customer_phone, source, payment_status, total_amount, amount_paid, balance_due, plan_start_date, duration_months, root_enrollment_id, created_at')
+                .is('deleted_at', null),
+            supabase.from('enrollment_payments').select('enrollment_id, amount'),
+        ]);
+        if (eEnroll) throw eEnroll;
+        if (ePay) throw ePay;
+
+        const rows = enrollments || [];
+
+        const ledgerByEnrollment = new Map();
+        (payments || []).forEach((p) => {
+            ledgerByEnrollment.set(p.enrollment_id, (ledgerByEnrollment.get(p.enrollment_id) || 0) + Number(p.amount || 0));
+        });
+
+        // ── Per-row integrity checks ────────────────────────────────────────
+        const issues = [];
+        const flag = (row, type, message) => issues.push({
+            type, message,
+            enrollmentId: row.enrollment_id, id: row.id, customerName: row.customer_name || 'Unknown',
+        });
+
+        rows.forEach((row) => {
+            const status = row.payment_status || 'paid';
+            const total = Number(row.total_amount ?? row.amount_paid ?? 0);
+            const amountPaid = Number(row.amount_paid || 0);
+            const balanceDue = Number(row.balance_due || 0);
+            const ledgerSum = ledgerByEnrollment.get(row.id) || 0;
+
+            if (status === 'paid' && !row.plan_start_date) {
+                flag(row, 'missing_plan_start_date', 'Paid but has no plan_start_date — Active/Expired badge can never appear for this row.');
+            }
+            if (status === 'paid' && amountPaid <= 0) {
+                flag(row, 'paid_with_zero_amount', 'Marked Paid but amount_paid is ₹0 — shows as paid while contributing nothing to revenue.');
+            }
+            // Refunded is EXCLUDED here on purpose — its ledger is supposed
+            // to still show the original payment (that's the historical
+            // record refundEnrollment deliberately leaves alone), so a
+            // "mismatch" there is the expected, correct state, not a bug.
+            if (status !== 'refunded' && Math.abs(ledgerSum - amountPaid) > AMOUNT_SLACK) {
+                flag(row, 'ledger_mismatch', `amount_paid (₹${amountPaid}) doesn't match the payment ledger's sum (₹${ledgerSum}).`);
+            }
+            if (Math.abs(Math.max(0, total - amountPaid) - balanceDue) > AMOUNT_SLACK) {
+                flag(row, 'balance_mismatch', `balance_due (₹${balanceDue}) should be ₹${Math.max(0, total - amountPaid)} given total_amount and amount_paid.`);
+            }
+        });
+
+        // ── Duplicate customers — the same email/phone with more than one
+        // live (pending/paid) enrollment, the exact "website + admin, same
+        // client" gap createManualEnrollment's duplicate-warning guards
+        // against at creation time. Reported here as a standing check too,
+        // since that guard only fires at the moment of creation. ───────────
+        const liveRows = rows.filter((r) => ['pending', 'paid'].includes(r.payment_status || 'paid'));
+        const byContact = new Map();
+        liveRows.forEach((row) => {
+            [row.customer_email, row.customer_phone].filter(Boolean).forEach((key) => {
+                if (!byContact.has(key)) byContact.set(key, new Set());
+                byContact.get(key).add(row.id);
+            });
+        });
+        const duplicateGroups = [];
+        const seenGroups = new Set();
+        byContact.forEach((idSet, key) => {
+            if (idSet.size < 2) return;
+            const groupKey = [...idSet].sort().join(',');
+            if (seenGroups.has(groupKey)) return;
+            seenGroups.add(groupKey);
+            const groupRows = rows.filter((r) => idSet.has(r.id));
+            duplicateGroups.push({
+                contact: key,
+                enrollments: groupRows.map((r) => ({
+                    id: r.id, enrollmentId: r.enrollment_id, customerName: r.customer_name,
+                    paymentStatus: r.payment_status, source: r.source, createdAt: r.created_at,
+                })),
+            });
+        });
+
+        // ── Revenue reconciliation — two independent ways to total "money
+        // actually collected right now," which must agree exactly. ─────────
+        const paidRows = rows.filter((r) => (r.payment_status || 'paid') === 'paid');
+        const revenueFromRows = paidRows.reduce((s, r) => s + Number(r.amount_paid || 0), 0);
+        const revenueFromLedger = paidRows.reduce((s, r) => s + (ledgerByEnrollment.get(r.id) || 0), 0);
+
+        // ── Lifecycle counts — an independent server-side re-derivation of
+        // the same Active/Expiring/Expired/Renewed/No-Plan buckets the
+        // Enrollments page computes client-side, so the two can be compared.
+        // Grouped per CUSTOMER exactly like the frontend does (a renewed
+        // client's multiple rows count once, under whichever period is live).
+        const rank = (lc) => (!lc ? 0 : lc.tag === 'expired' ? 1 : lc.expiringSoon ? 2 : 3);
+        const lifecycleOf = (row) => {
+            if ((row.payment_status || 'paid') !== 'paid' || !row.plan_start_date || !row.duration_months) return null;
+            const end = computePlanEndDate(row.plan_start_date, row.duration_months);
+            if (!end) return null;
+            const daysRemaining = Math.ceil((end.getTime() - Date.now()) / 86400000);
+            if (daysRemaining < 0) return { tag: 'expired', daysRemaining };
+            return { tag: row.root_enrollment_id ? 'active_renewed' : 'active', daysRemaining, expiringSoon: daysRemaining <= 7 };
+        };
+        const byCustomer = new Map();
+        rows.forEach((row) => {
+            const key = row.customer_email || row.customer_phone || row.id;
+            const lc = lifecycleOf(row);
+            const prev = byCustomer.get(key);
+            if (!prev || rank(lc) >= rank(prev)) byCustomer.set(key, lc);
+        });
+        const lifecycle = { active: 0, expiringSoon: 0, expired: 0, renewed: 0, noPlan: 0 };
+        byCustomer.forEach((lc) => {
+            if (!lc) { lifecycle.noPlan += 1; return; }
+            if (lc.tag === 'expired') { lifecycle.expired += 1; return; }
+            lifecycle.active += 1;
+            if (lc.expiringSoon) lifecycle.expiringSoon += 1;
+            if (lc.tag === 'active_renewed') lifecycle.renewed += 1;
+        });
+
+        const statusCounts = rows.reduce((acc, r) => {
+            const s = r.payment_status || 'paid';
+            acc[s] = (acc[s] || 0) + 1;
+            return acc;
+        }, {});
+
+        return res.json({
+            generatedAt: new Date().toISOString(),
+            totals: {
+                enrollmentCount: rows.length,
+                ledgerEntryCount: (payments || []).length,
+                statusCounts,
+            },
+            revenue: {
+                fromEnrollmentRows: revenueFromRows,
+                fromPaymentLedger: revenueFromLedger,
+                matches: Math.abs(revenueFromRows - revenueFromLedger) <= AMOUNT_SLACK,
+            },
+            lifecycle,
+            duplicateGroups,
+            issues,
+        });
+    } catch (err) {
+        logger.error(`[admin] getDataAudit failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to load data audit.' });
     }
 }
