@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { waitUntil } from '@vercel/functions';
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { logTxnStep } from '../services/txnLogService.js';
-import { finalizePaidEnrollment } from '../services/paymentLedgerService.js';
+import { finalizePaidEnrollment, flagPossibleDuplicatePayment } from '../services/paymentLedgerService.js';
 import { sendEnrollmentConfirmation } from './paymentController.js';
 import { timingSafeEqualStr } from '../utils/razorpay.js';
 import logger from '../config/logger.js';
@@ -69,7 +69,23 @@ export async function handleRazorpayWebhook(req, res) {
         }
 
         if (!data) {
-            // Already processed by the client-side confirm-payment path — fine, just ack
+            // Already processed — normally by the client-side confirm-payment
+            // path winning the race. Check WHICH payment actually finalized
+            // it: if it's this exact one, that's the expected retry/replay
+            // case, fine to just ack. If it's a different payment (or the row
+            // was marked paid with no razorpay_payment_id at all — i.e. a
+            // manual entry), this webhook is reporting real captured money
+            // that nothing else would ever record — flag it instead of
+            // silently dropping it.
+            const { data: existing } = await supabase.from('enrollments').select('*').eq('razorpay_order_id', orderId).maybeSingle();
+            if (existing && existing.payment_status === 'paid' && existing.razorpay_payment_id !== paymentId) {
+                flagPossibleDuplicatePayment(existing, {
+                    paymentId,
+                    amount: payment.amount / 100,
+                    paidAt: new Date(payment.created_at * 1000).toISOString(),
+                    source: 'webhook',
+                });
+            }
             return res.status(200).json({ received: true, alreadyProcessed: true });
         }
 
