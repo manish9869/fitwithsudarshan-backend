@@ -11,6 +11,7 @@
 import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 import { getSignedFileUrl } from '../services/assessmentService.js';
 import { computePlanEndDate } from './manualEnrollmentController.js';
+import { recomputeEnrollmentTotals } from '../services/paymentLedgerService.js';
 import logger from '../config/logger.js';
 
 // Plans with this many days (or fewer) left are surfaced in the "Ending
@@ -171,6 +172,29 @@ export async function updateEnrollmentStatus(req, res) {
     } catch (err) {
         logger.error(`[admin] updateEnrollmentStatus failed: ${err.message}`);
         return res.status(500).json({ error: 'Failed to update status.' });
+    }
+}
+
+// ── POST /api/admin/enrollments/:id/recompute-status ────────────────────────
+// The safe undo for "accidentally clicked Pending/Failed/Refunded on a row
+// that was actually already paid": re-derives payment_status/amount_paid/
+// balance_due straight from the SUM of what's actually on the payment
+// ledger (enrollment_payments) — not from a re-typed amount, and not by
+// hand-picking 'paid' again (still blocked by design in updateEnrollmentStatus).
+// Safe because the ledger itself is never touched by a status-dropdown
+// click, in either direction — a mis-click zeroes/changes the enrollments
+// row's summary fields, never the underlying payment records, so this
+// always recovers the true state. If the ledger genuinely sums to 0 (a
+// pending row with no payment ever recorded), this correctly leaves it
+// 'pending' rather than fabricating a paid status.
+export async function recomputeEnrollmentStatus(req, res) {
+    try {
+        const enrollment = await recomputeEnrollmentTotals(req.params.id);
+        logger.info(`[admin] ${req.admin.username} recomputed status for ${enrollment.enrollment_id} from the payment ledger`);
+        return res.json({ enrollment });
+    } catch (err) {
+        logger.error(`[admin] recomputeEnrollmentStatus failed: ${err.message}`);
+        return res.status(400).json({ error: err.message || 'Failed to recompute status.' });
     }
 }
 
