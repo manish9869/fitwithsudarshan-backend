@@ -117,6 +117,36 @@ export async function createManualEnrollment(req, res) {
         }
 
         const supabase = getSupabaseAdmin();
+
+        // ── Duplicate-customer guard ──────────────────────────────────────
+        // The exact "website + admin, same client" race this exists for: a
+        // customer's checkout is sitting there pending/paid (gateway looked
+        // timed out, or actually went through) and the admin — not having
+        // spotted it — creates a brand-new manual row for the same person,
+        // producing two live enrollments instead of one payment recorded
+        // against the existing one. Warns rather than blocks (a genuine
+        // second/different program for the same client is legitimate) — the
+        // frontend shows what it found and the admin explicitly confirms
+        // before this fires again with confirmDuplicate:true.
+        if (!b.confirmDuplicate && (b.customerEmail || b.customerPhone)) {
+            const clauses = [];
+            if (b.customerEmail) clauses.push(`customer_email.eq.${String(b.customerEmail).replace(/[%,]/g, '')}`);
+            if (b.customerPhone) clauses.push(`customer_phone.eq.${String(b.customerPhone).replace(/[%,]/g, '')}`);
+            const { data: dupes } = await supabase
+                .from('enrollments')
+                .select('id, enrollment_id, customer_name, program_name, payment_status, source, created_at')
+                .is('deleted_at', null)
+                .in('payment_status', ['pending', 'paid'])
+                .or(clauses.join(','));
+
+            if (dupes && dupes.length > 0) {
+                return res.status(409).json({
+                    error: `${dupes[0].customer_name} already has ${dupes.length > 1 ? `${dupes.length} enrollments` : 'an enrollment'} on file (${dupes.map((d) => d.enrollment_id).join(', ')}) — check it's not the same checkout before creating a new one.`,
+                    duplicates: dupes,
+                });
+            }
+        }
+
         const paymentDate = b.paymentDate ? new Date(b.paymentDate).toISOString() : new Date().toISOString();
         const totalAmount = Number(b.totalAmount);
         const initialPayment = b.initialPaymentAmount != null && b.initialPaymentAmount !== ''
@@ -191,7 +221,13 @@ export async function createManualEnrollment(req, res) {
         return res.status(201).json({ enrollment: final });
     } catch (err) {
         logger.error(`[admin] createManualEnrollment failed: ${err.message}`);
-        return res.status(500).json({ error: 'Failed to create manual enrollment.' });
+        // Surface the real message (e.g. recordPayment's overpayment guard) —
+        // this used to always show a generic failure, which was especially
+        // confusing here since the enrollment row is inserted BEFORE the
+        // initial payment is recorded, so a rejected payment leaves a real
+        // (visible, deletable from the Manual Enrollments list) pending row
+        // behind with no clue why the payment itself didn't go through.
+        return res.status(400).json({ error: err.message || 'Failed to create manual enrollment.' });
     }
 }
 

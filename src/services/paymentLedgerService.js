@@ -38,6 +38,56 @@ export async function finalizePaidEnrollment(row, { source } = {}) {
     });
 }
 
+// ── A real Razorpay payment captures for an order whose enrollment was
+// ALREADY marked paid via a DIFFERENT payment (razorpay_payment_id differs,
+// or is null because it was recorded manually) — e.g. the customer's
+// checkout looked timed out, they paid the admin directly by UPI, the admin
+// recorded that manually, and THEN the original gateway charge actually
+// captured anyway. That real money moved through Razorpay and — before this
+// — nothing else in the system would ever record or surface it: the
+// idempotency guard treated it as "already processed" and silently dropped
+// it. This is NOT that case (a true retry/replay of the SAME payment is
+// still a safe no-op, handled by the caller) — this is a second, different
+// payment. Both confirmPayment and the webhook hit this, so it lives here
+// once rather than drifting between the two like finalizePaidEnrollment.
+export async function flagPossibleDuplicatePayment(row, { paymentId, amount, paidAt, source }) {
+    const supabase = getSupabaseAdmin();
+    logger.warn(
+        `[${source}] ⚠️ POSSIBLE DOUBLE PAYMENT — Razorpay payment ${paymentId} (₹${amount}) captured for ` +
+        `${row.enrollment_id} (${row.customer_name}), which was already marked paid via a different payment ` +
+        `(${row.razorpay_payment_id || 'manual entry'}). Recording it and flagging for manual review.`
+    );
+
+    supabase.from('enrollment_payments').insert([{
+        enrollment_id: row.id,
+        amount,
+        method: 'razorpay',
+        reference: paymentId,
+        note: 'Captured after this enrollment was already marked paid via a different payment — possible duplicate charge, verify with customer.',
+        paid_at: paidAt,
+    }]).then(({ error }) => {
+        if (error) logger.error(`[${source}] duplicate-payment ledger insert failed: ${error.message}`);
+    });
+
+    // Surface it on the generic admin_notes record (shown in the enrollment
+    // detail drawer regardless of source) rather than the manual-enrollment-
+    // only admin_note column, which a website-sourced row never shows —
+    // append, don't overwrite, since a real note may already be there.
+    try {
+        const { data: existingNote } = await supabase
+            .from('admin_notes').select('note').eq('record_type', 'enrollment').eq('record_id', row.id).maybeSingle();
+        const flag = `⚠️ ${new Date().toISOString().slice(0, 10)}: Razorpay payment ${paymentId} (₹${amount}) captured ` +
+            `AFTER this enrollment was already marked paid — possible double payment, verify with the customer.`;
+        const text = existingNote?.note ? `${existingNote.note}\n\n${flag}` : flag;
+        await supabase.from('admin_notes').upsert(
+            { record_type: 'enrollment', record_id: row.id, note: text, updated_at: new Date().toISOString() },
+            { onConflict: 'record_type,record_id' }
+        );
+    } catch (e) {
+        logger.error(`[${source}] duplicate-payment note flag failed: ${e.message}`);
+    }
+}
+
 export async function recordPayment({ enrollmentId, amount, method = 'other', reference, note, recordedBy, paidAt }) {
     const supabase = getSupabaseAdmin();
     const amt = Number(amount);
@@ -47,10 +97,27 @@ export async function recordPayment({ enrollmentId, amount, method = 'other', re
 
     const { data: enrollment, error: fetchErr } = await supabase
         .from('enrollments')
-        .select('id')
+        .select('id, total_amount, amount_paid')
         .eq('id', enrollmentId)
         .single();
     if (fetchErr || !enrollment) throw new Error('Enrollment not found.');
+
+    // Guard against a fat-fingered or duplicated entry pushing amount_paid
+    // past what's actually owed (e.g. re-recording the same UPI transfer
+    // twice, or a typo adding a zero). total_amount is the number set
+    // deliberately at checkout/creation, so it's trusted over re-deriving
+    // one from the ledger. Only enforced when total_amount is actually
+    // known — older rows without one fall through, same as
+    // recomputeEnrollmentTotals's own fallback below.
+    const total = Number(enrollment.total_amount || 0);
+    if (total > 0) {
+        const remaining = total - Number(enrollment.amount_paid || 0);
+        if (amt > remaining + 1) { // ₹1 slack for rounding
+            throw new Error(
+                `This payment (₹${amt.toLocaleString('en-IN')}) would exceed the outstanding balance of ₹${Math.max(0, remaining).toLocaleString('en-IN')}. Correct the total amount first if this is intentional.`
+            );
+        }
+    }
 
     const { error: insertErr } = await supabase.from('enrollment_payments').insert([{
         enrollment_id: enrollmentId,

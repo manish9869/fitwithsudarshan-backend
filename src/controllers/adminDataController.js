@@ -119,13 +119,22 @@ export async function getEnrollment(req, res) {
 }
 
 // ── PATCH /api/admin/enrollments/:id/status ─────────────────────────────────
-const VALID_ENROLLMENT_STATUSES = ['paid', 'pending', 'failed', 'refunded'];
+// 'paid' is deliberately NOT in this list — it must only ever be set as a
+// side effect of money actually being recorded (recordPayment/
+// recomputeEnrollmentTotals, or the website checkout's confirmPayment/
+// webhook), never by hand-picking it here. This endpoint used to allow it,
+// which let an admin flip a ₹0-collected row straight to "Paid" — amount_paid
+// and balance_due stayed exactly as they were, so the row showed Paid while
+// simultaneously still counting as outstanding balance. Recovering from a
+// wrong failed/refunded now goes through Pending → Record Payment instead,
+// which is the only path that writes a correct amount_paid/balance_due.
+const VALID_ENROLLMENT_STATUSES = ['pending', 'failed', 'refunded'];
 export async function updateEnrollmentStatus(req, res) {
     try {
         const { status } = req.body || {};
         if (!VALID_ENROLLMENT_STATUSES.includes(status)) {
             return res.status(400).json({
-                error: `Invalid status. Must be one of: ${VALID_ENROLLMENT_STATUSES.join(', ')}`,
+                error: `Invalid status. Must be one of: ${VALID_ENROLLMENT_STATUSES.join(', ')} — 'paid' can only be set by recording an actual payment.`,
             });
         }
         const supabase = getSupabaseAdmin();

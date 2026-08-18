@@ -12,7 +12,7 @@ import { logTxnStep } from '../services/txnLogService.js';
 import { generateEnrollmentId } from '../utils/enrollmentId.js';
 import { waitUntil } from '@vercel/functions';
 import { toTitleCase } from '../utils/textFormat.js';
-import { finalizePaidEnrollment } from '../services/paymentLedgerService.js';
+import { finalizePaidEnrollment, flagPossibleDuplicatePayment } from '../services/paymentLedgerService.js';
 import { isMaintenanceModeEnabled } from '../services/contentService.js';
 // ── POST /api/create-order ────────────────────────────────────────────────
 // Client no longer sends `amount` — the server resolves the real price and
@@ -216,6 +216,24 @@ export async function confirmPayment(req, res, next) {
             // Either the webhook already finished this, or the pending row is missing entirely.
             const { data: existing } = await supabase.from('enrollments').select('*').eq('razorpay_order_id', oid).maybeSingle();
             if (existing?.payment_status === 'paid') {
+                // Same payment already recorded (webhook won the race, or this
+                // is a retry) — safe no-op, exactly as before.
+                if (existing.razorpay_payment_id === pid) {
+                    return res.json({ success: true, enrollment: existing, alreadyProcessed: true });
+                }
+                // A DIFFERENT payment than whatever already marked this row
+                // paid (e.g. an admin recorded a manual UPI transfer for a
+                // checkout that looked timed out, and this gateway charge
+                // captured anyway) — this is real money Razorpay actually
+                // took that nothing would otherwise ever record. Flag it
+                // instead of silently dropping it, but still tell the
+                // customer their payment succeeded.
+                flagPossibleDuplicatePayment(existing, {
+                    paymentId: pid,
+                    amount: payment.amount / 100,
+                    paidAt: new Date(payment.created_at * 1000).toISOString(),
+                    source: 'confirm_payment',
+                });
                 return res.json({ success: true, enrollment: existing, alreadyProcessed: true });
             }
             logger.error(`[confirm-payment] 🚨 no pending row found for order=${oid}`);
