@@ -955,23 +955,36 @@ export async function getDataAudit(req, res) {
             }
         });
 
-        // ── Duplicate customers — the same email/phone with more than one
-        // live (pending/paid) enrollment, the exact "website + admin, same
+        // ── Duplicate customers — the same email/phone spanning more than
+        // one DISTINCT ENROLLMENT CHAIN, the exact "website + admin, same
         // client" gap createManualEnrollment's duplicate-warning guards
         // against at creation time. Reported here as a standing check too,
-        // since that guard only fires at the moment of creation. ───────────
+        // since that guard only fires at the moment of creation.
+        //
+        // Grouped by chain root (root_enrollment_id || id), NOT by raw row —
+        // a legitimately renewed client has two rows (the original +
+        // createEnrollmentExtension's extension row) that share an email
+        // and are both 'paid', which looked identical to a real duplicate
+        // until this was fixed. Only contacts with rows in TWO OR MORE
+        // separate chains are genuine duplicates; two rows in the SAME
+        // chain are one customer on their second period, not two customers.
         const liveRows = rows.filter((r) => ['pending', 'paid'].includes(r.payment_status || 'paid'));
-        const byContact = new Map();
+        const byContact = new Map(); // contact -> Map(chainRootId -> Set(rowIds))
         liveRows.forEach((row) => {
+            const chainRoot = row.root_enrollment_id || row.id;
             [row.customer_email, row.customer_phone].filter(Boolean).forEach((key) => {
-                if (!byContact.has(key)) byContact.set(key, new Set());
-                byContact.get(key).add(row.id);
+                if (!byContact.has(key)) byContact.set(key, new Map());
+                const chains = byContact.get(key);
+                if (!chains.has(chainRoot)) chains.set(chainRoot, new Set());
+                chains.get(chainRoot).add(row.id);
             });
         });
         const duplicateGroups = [];
         const seenGroups = new Set();
-        byContact.forEach((idSet, key) => {
-            if (idSet.size < 2) return;
+        byContact.forEach((chains, key) => {
+            if (chains.size < 2) return; // one chain (possibly renewed) — not a duplicate
+            const idSet = new Set();
+            chains.forEach((ids) => ids.forEach((id) => idSet.add(id)));
             const groupKey = [...idSet].sort().join(',');
             if (seenGroups.has(groupKey)) return;
             seenGroups.add(groupKey);
