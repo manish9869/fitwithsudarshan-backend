@@ -9,6 +9,7 @@ import {
     listEnrollments,
     getEnrollment,
     updateEnrollmentStatus,
+    recomputeEnrollmentStatus,
     updatePlanStartDate,
     exportEnrollments,
     listAssessments,
@@ -93,6 +94,7 @@ router.get('/enrollments', listEnrollments);
 router.get('/enrollments/:id', getEnrollment);
 router.get('/funnel-audit', getFunnelAudit);
 router.patch('/enrollments/:id/status', updateEnrollmentStatus);
+router.post('/enrollments/:id/recompute-status', recomputeEnrollmentStatus);
 router.patch('/enrollments/:id/plan-start-date', updatePlanStartDate);
 router.delete('/enrollments/manual/:id', deleteManualEnrollment);
 router.delete('/enrollments/:id', softDeleteEnrollment);
