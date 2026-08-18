@@ -399,6 +399,10 @@ export async function updateManualEnrollment(req, res) {
             payment_method: b.paymentMethod || 'other',
             admin_note: b.adminNote || null,
         };
+        // Only write when explicitly sent — omitting it must never null out
+        // an existing plan_start_date, since nothing else in the app ever
+        // repairs that field once it's gone.
+        if (b.planStartDate) update.plan_start_date = new Date(b.planStartDate).toISOString();
 
         const { error } = await supabase.from('enrollments').update(update).eq('id', req.params.id);
         if (error) throw error;
