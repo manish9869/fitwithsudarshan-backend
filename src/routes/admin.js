@@ -9,6 +9,7 @@ import {
     listEnrollments,
     getEnrollment,
     updateEnrollmentStatus,
+    updatePlanStartDate,
     exportEnrollments,
     listAssessments,
     getAssessment,
@@ -92,6 +93,7 @@ router.get('/enrollments', listEnrollments);
 router.get('/enrollments/:id', getEnrollment);
 router.get('/funnel-audit', getFunnelAudit);
 router.patch('/enrollments/:id/status', updateEnrollmentStatus);
+router.patch('/enrollments/:id/plan-start-date', updatePlanStartDate);
 router.delete('/enrollments/manual/:id', deleteManualEnrollment);
 router.delete('/enrollments/:id', softDeleteEnrollment);
 
