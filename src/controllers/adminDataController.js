@@ -165,6 +165,40 @@ export async function updateEnrollmentStatus(req, res) {
     }
 }
 
+// ── PATCH /api/admin/enrollments/:id/plan-start-date ────────────────────────
+// Backfills plan_start_date on enrollments that never got one set by the
+// normal flows — e.g. a website checkout whose gateway timed out (so
+// confirmPayment/the webhook never ran) and was later marked paid by hand
+// after the customer paid the admin directly. Nothing else ever writes this
+// column after creation, so without this endpoint that row's Active/Expired
+// badge stays blank forever. Works on any enrollment regardless of source
+// (unlike updateManualEnrollment, which is only reachable for source='manual'
+// rows from the Manual Enrollments page).
+export async function updatePlanStartDate(req, res) {
+    try {
+        const { planStartDate } = req.body || {};
+        if (!planStartDate || isNaN(new Date(planStartDate).getTime())) {
+            return res.status(400).json({ error: 'A valid planStartDate is required.' });
+        }
+        const supabase = getSupabaseAdmin();
+
+        const { data, error } = await supabase
+            .from('enrollments')
+            .update({ plan_start_date: new Date(planStartDate).toISOString() })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error || !data) return res.status(404).json({ error: 'Enrollment not found.' });
+
+        logger.info(`[admin] ${req.admin.username} set plan_start_date on ${data.enrollment_id}`);
+        return res.json({ enrollment: data });
+    } catch (err) {
+        logger.error(`[admin] updatePlanStartDate failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to update plan start date.' });
+    }
+}
+
 // ── GET /api/admin/enrollments/export ───────────────────────────────────────
 // Returns ALL rows matching filters (no pagination) for CSV export client-side.
 export async function exportEnrollments(req, res) {
