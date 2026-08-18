@@ -8,8 +8,7 @@ import { getAdminProfile, updateAdminProfile } from '../controllers/adminProfile
 import {
     listEnrollments,
     getEnrollment,
-    updateEnrollmentStatus,
-    recomputeEnrollmentStatus,
+    refundEnrollment,
     updatePlanStartDate,
     exportEnrollments,
     listAssessments,
@@ -17,7 +16,7 @@ import {
     updateAssessmentStatus,
     updateAssessmentReviewed,
     upsertNote,
-    getDashboard, getFunnelAudit,
+    getDashboard, getFunnelAudit, getDataAudit,
     softDeleteEnrollment, softDeleteAssessment,
 } from '../controllers/adminDataController.js';
 import { exportAssessments } from '../controllers/adminDataController.js';
@@ -93,8 +92,8 @@ router.get('/enrollments/search', searchEnrollmentsByContact);
 router.get('/enrollments', listEnrollments);
 router.get('/enrollments/:id', getEnrollment);
 router.get('/funnel-audit', getFunnelAudit);
-router.patch('/enrollments/:id/status', updateEnrollmentStatus);
-router.post('/enrollments/:id/recompute-status', recomputeEnrollmentStatus);
+router.get('/data-audit', getDataAudit);
+router.post('/enrollments/:id/refund', refundEnrollment);
 router.patch('/enrollments/:id/plan-start-date', updatePlanStartDate);
 router.delete('/enrollments/manual/:id', deleteManualEnrollment);
 router.delete('/enrollments/:id', softDeleteEnrollment);
