@@ -157,6 +157,72 @@ describe('GET /api/admin/data-audit', () => {
         expect(res.body.duplicateGroups[0].enrollments).toHaveLength(2);
     });
 
+    it('does NOT treat a renewed client (root + extension, same chain) as a duplicate customer', async () => {
+        fake = createFakeSupabase({
+            enrollments: [
+                {
+                    id: 'root-1', enrollment_id: 'FIT-2026-158385', customer_name: 'Vishwa',
+                    customer_email: 'vishwa@example.com', payment_status: 'paid',
+                    total_amount: 500, amount_paid: 500, balance_due: 0,
+                    plan_start_date: daysAgoISO(90), duration_months: '3', deleted_at: null,
+                },
+                { // the extension — same chain, root_enrollment_id points back to root-1
+                    id: 'ext-1', enrollment_id: 'FIT-2026-659310', customer_name: 'Vishwa',
+                    customer_email: 'vishwa@example.com', payment_status: 'paid',
+                    root_enrollment_id: 'root-1',
+                    total_amount: 500, amount_paid: 500, balance_due: 0,
+                    plan_start_date: daysAgoISO(5), duration_months: '3', deleted_at: null,
+                },
+            ],
+            enrollment_payments: [
+                { id: 'p1', enrollment_id: 'root-1', amount: 500 },
+                { id: 'p2', enrollment_id: 'ext-1', amount: 500 },
+            ],
+        });
+        getSupabaseAdmin.mockReturnValue(fake.client);
+
+        const res = await run();
+        expect(res.body.duplicateGroups).toHaveLength(0);
+    });
+
+    it('DOES flag two genuinely separate chains for the same contact (a real duplicate alongside a renewal)', async () => {
+        fake = createFakeSupabase({
+            enrollments: [
+                {
+                    id: 'root-1', enrollment_id: 'FIT-2026-100001', customer_name: 'Real Dup',
+                    customer_email: 'realdup@example.com', payment_status: 'paid',
+                    total_amount: 500, amount_paid: 500, balance_due: 0,
+                    plan_start_date: daysAgoISO(90), duration_months: '3', deleted_at: null,
+                },
+                { // legitimate renewal of root-1 — same chain, must not count toward "separate chains"
+                    id: 'ext-1', enrollment_id: 'FIT-2026-100002', customer_name: 'Real Dup',
+                    customer_email: 'realdup@example.com', payment_status: 'paid',
+                    root_enrollment_id: 'root-1',
+                    total_amount: 500, amount_paid: 500, balance_due: 0,
+                    plan_start_date: daysAgoISO(5), duration_months: '3', deleted_at: null,
+                },
+                { // a totally separate, independently-created enrollment — different chain entirely
+                    id: 'other-1', enrollment_id: 'FIT-2026-100003', customer_name: 'Real Dup',
+                    customer_email: 'realdup@example.com', payment_status: 'pending',
+                    total_amount: 500, amount_paid: 0, balance_due: 500, deleted_at: null,
+                },
+            ],
+            enrollment_payments: [
+                { id: 'p1', enrollment_id: 'root-1', amount: 500 },
+                { id: 'p2', enrollment_id: 'ext-1', amount: 500 },
+            ],
+        });
+        getSupabaseAdmin.mockReturnValue(fake.client);
+
+        const res = await run();
+        expect(res.body.duplicateGroups).toHaveLength(1);
+        // All 3 rows surface (the renewal chain plus the separate one) so the
+        // admin can see the full picture, not just the two that "clashed."
+        expect(res.body.duplicateGroups[0].enrollments.map((e) => e.enrollmentId).sort()).toEqual([
+            'FIT-2026-100001', 'FIT-2026-100002', 'FIT-2026-100003',
+        ]);
+    });
+
     it('does not treat failed/refunded rows sharing an email as duplicates', async () => {
         fake = createFakeSupabase({
             enrollments: [
