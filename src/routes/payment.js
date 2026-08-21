@@ -7,6 +7,7 @@ import {
     assessmentUpload, submitAssessmentHandler,
     photoOnlyUpload, getPhotoUploadStatusHandler, uploadPhotosByTokenHandler,
 } from '../controllers/assessmentController.js';
+import { submitLeadHandler } from '../controllers/leadController.js';
 import { validateCoupon } from '../controllers/couponController.js';
 import { logClientEvent } from '../controllers/logController.js';
 import { handleRazorpayWebhook } from '../controllers/webhookController.js';
@@ -36,6 +37,12 @@ router.post('/invoice', emailLimiter, downloadInvoice);
 //    (10MB each) plus 2 emails plus a DB insert per call, so the generic
 //    global limiter alone is too loose for it. ───────────────────────────────
 router.post('/submit-assessment', assessmentLimiter, assessmentUpload, submitAssessmentHandler);
+
+// ── Cold-enquiry leads — hero "Apply For Coaching" modal. Same limiter class
+//    as the assessment form: public, unauthenticated, does a DB insert plus
+//    fires 2 emails. No file uploads here, but there's no lighter limiter
+//    already tuned for "form + DB write + emails, no files". ─────────────────
+router.post('/leads', assessmentLimiter, submitLeadHandler);
 
 // ── Upload photos later — token-based, lets a client who skipped photos at
 //    onboarding come back and attach them to the same assessment. Same

@@ -514,6 +514,107 @@ export async function updateAssessmentReviewed(req, res) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// LEADS — "Apply For Coaching" hero-modal cold enquiries
+// ════════════════════════════════════════════════════════════════════════════
+
+const VALID_LEAD_STATUSES = ['new', 'contacted', 'converted', 'not_interested'];
+
+// ── GET /api/admin/leads ────────────────────────────────────────────────────
+export async function listLeads(req, res) {
+    try {
+        const supabase = getSupabaseAdmin();
+        const {
+            search = '',
+            status = 'all',
+            sortField = 'created_at',
+            sortDir = 'desc',
+            page = 1,
+            pageSize = PAGE_SIZE_DEFAULT,
+        } = req.query;
+
+        const ALLOWED_SORT = new Set(['created_at', 'name', 'status', 'goal']);
+        const sortF = ALLOWED_SORT.has(sortField) ? sortField : 'created_at';
+        const ps = clampPageSize(pageSize);
+        const pg = Math.max(1, parseInt(page, 10) || 1);
+
+        let query = supabase.from('leads').select('*', { count: 'exact' });
+        if (req.query.includeDeleted !== 'true') {
+            query = query.is('deleted_at', null);
+        }
+        if (search.trim()) {
+            const s = search.trim().replace(/[%,]/g, '');
+            query = query.or(`name.ilike.%${s}%,email.ilike.%${s}%,phone.ilike.%${s}%`);
+        }
+        if (status !== 'all') query = query.eq('status', status);
+
+        query = query
+            .order(sortF, { ascending: sortDir === 'asc' })
+            .range((pg - 1) * ps, pg * ps - 1);
+
+        const { data, error, count } = await query;
+        if (error) throw error;
+
+        const ids = (data || []).map((r) => r.id);
+        const notesMap = await getNotesMap(supabase, 'lead', ids);
+        const rows = (data || []).map((r) => ({ ...r, note: notesMap[r.id] || null }));
+
+        return res.json({ rows, total: count || 0, page: pg, pageSize: ps });
+    } catch (err) {
+        logger.error(`[admin] listLeads failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to load leads.' });
+    }
+}
+
+// ── PATCH /api/admin/leads/:id/status ───────────────────────────────────────
+export async function updateLeadStatus(req, res) {
+    try {
+        const { status } = req.body || {};
+        if (!VALID_LEAD_STATUSES.includes(status)) {
+            return res.status(400).json({
+                error: `Invalid status. Must be one of: ${VALID_LEAD_STATUSES.join(', ')}`,
+            });
+        }
+
+        const supabase = getSupabaseAdmin();
+        const { data, error } = await supabase
+            .from('leads')
+            .update({ status })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error || !data) return res.status(404).json({ error: 'Lead not found.' });
+
+        logger.info(`[admin] ${req.admin.username} set lead ${data.id} → ${status}`);
+        return res.json({ lead: data });
+    } catch (err) {
+        logger.error(`[admin] updateLeadStatus failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to update status.' });
+    }
+}
+
+// ── DELETE /api/admin/leads/:id — soft delete ───────────────────────────────
+export async function softDeleteLead(req, res) {
+    try {
+        const supabase = getSupabaseAdmin();
+        const { data, error } = await supabase
+            .from('leads')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error || !data) return res.status(404).json({ error: 'Lead not found.' });
+
+        logger.info(`[admin] ${req.admin.username} soft-deleted lead ${data.id}`);
+        return res.json({ success: true, lead: data });
+    } catch (err) {
+        logger.error(`[admin] softDeleteLead failed: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to delete lead.' });
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // NOTES (server-side, shared across admins — replaces localStorage notes)
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -539,7 +640,7 @@ async function getNotesMap(supabase, recordType, ids) {
 export async function upsertNote(req, res) {
     try {
         const { recordType, recordId, note } = req.body || {};
-        if (!['enrollment', 'assessment'].includes(recordType) || !recordId) {
+        if (!['enrollment', 'assessment', 'lead'].includes(recordType) || !recordId) {
             return res.status(400).json({ error: 'recordType and recordId are required.' });
         }
 
