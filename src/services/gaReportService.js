@@ -43,6 +43,20 @@ const EXCLUDE_ADMIN_PAGES = {
     },
 };
 
+// /upload-photos/<uuid> is a per-session upload link, not a page anyone
+// "visits" in a way worth reporting on — each row is a one-off UUID that's
+// meaningless in a ranked list and never recurs, so it's excluded from
+// page-level reports the same way admin traffic is.
+const EXCLUDE_UPLOAD_PHOTO_PAGES = {
+    notExpression: {
+        filter: { fieldName: 'pagePath', stringFilter: { matchType: 'BEGINS_WITH', value: '/upload-photos' } },
+    },
+};
+
+const EXCLUDE_NOISE_PAGES = {
+    andGroup: { expressions: [EXCLUDE_ADMIN_PAGES, EXCLUDE_UPLOAD_PHOTO_PAGES] },
+};
+
 // ── Section-level engagement (in-page scroll sections on the one-page
 // landing — Transformations, Pricing, etc.) ─────────────────────────────
 // GA4's page_view-based reporting has no visibility into which part of one
@@ -113,7 +127,7 @@ export async function getAnalyticsOverview(days = 30) {
             dimensions: [{ name: 'pagePath' }],
             metrics: [{ name: 'screenPageViews' }],
             orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
-            dimensionFilter: EXCLUDE_ADMIN_PAGES,
+            dimensionFilter: EXCLUDE_NOISE_PAGES,
             limit: 10,
         }),
         // ── Time spent per page — GA4's userEngagementDuration is total
@@ -127,7 +141,7 @@ export async function getAnalyticsOverview(days = 30) {
             dimensions: [{ name: 'pagePath' }],
             metrics: [{ name: 'userEngagementDuration' }, { name: 'screenPageViews' }, { name: 'activeUsers' }],
             orderBys: [{ metric: { metricName: 'userEngagementDuration' }, desc: true }],
-            dimensionFilter: EXCLUDE_ADMIN_PAGES,
+            dimensionFilter: EXCLUDE_NOISE_PAGES,
             limit: 15,
         }),
         getSectionEngagement(client, property, dateRange),
