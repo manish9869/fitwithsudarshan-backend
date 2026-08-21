@@ -18,6 +18,7 @@ import {
     upsertNote,
     getDashboard, getFunnelAudit, getDataAudit,
     softDeleteEnrollment, softDeleteAssessment,
+    listLeads, updateLeadStatus, softDeleteLead,
 } from '../controllers/adminDataController.js';
 import { exportAssessments } from '../controllers/adminDataController.js';
 
@@ -104,6 +105,10 @@ router.patch('/assessments/:id/status', updateAssessmentStatus);
 router.patch('/assessments/:id/reviewed', updateAssessmentReviewed);
 router.delete('/assessments/:id', softDeleteAssessment);
 router.put('/notes', upsertNote);
+
+router.get('/leads', listLeads);
+router.patch('/leads/:id/status', updateLeadStatus);
+router.delete('/leads/:id', softDeleteLead);
 
 router.get('/coupons', adminListCoupons);
 router.post('/coupons', adminCreateCoupon);

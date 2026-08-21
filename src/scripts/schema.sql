@@ -217,12 +217,37 @@ create index if not exists idx_assessments_created_at on assessments(created_at)
 create index if not exists idx_assessments_deleted_at on assessments(deleted_at);
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- ADMIN NOTES — freeform notes an admin attaches to an enrollment or assessment
+-- LEADS — "Apply For Coaching" hero-modal submissions. A cold enquiry: just
+-- name/email/phone/goal, not yet a full onboarding assessment or a paid
+-- enrollment. Tracked separately so the admin panel can work a follow-up
+-- queue on people who haven't committed to either of those yet.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create table if not exists leads (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  email text not null,
+  phone text not null,
+  goal text,
+  experience text,
+  message text,
+  status text not null default 'new',             -- 'new' | 'contacted' | 'converted' | 'not_interested'
+  source text not null default 'website',
+  deleted_at timestamptz,                          -- soft delete — filter .is('deleted_at', null)
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_leads_created_at on leads(created_at);
+create index if not exists idx_leads_deleted_at on leads(deleted_at);
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ADMIN NOTES — freeform notes an admin attaches to an enrollment, assessment
+-- or lead
 -- ═══════════════════════════════════════════════════════════════════════════
 
 create table if not exists admin_notes (
   id uuid primary key default gen_random_uuid(),
-  record_type text not null,                      -- 'enrollment' | 'assessment'
+  record_type text not null,                      -- 'enrollment' | 'assessment' | 'lead'
   record_id uuid not null,
   note text not null,
   created_by uuid references admins(id),
