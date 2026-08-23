@@ -20,7 +20,7 @@ export async function getLiveUsers() {
         return _cache.data;
     }
 
-    const client = getGaClient();
+    const client = await getGaClient();
     const [response] = await client.runRealtimeReport({
         property: ga4PropertyPath(),
         dimensions: [{ name: 'unifiedScreenName' }],
