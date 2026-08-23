@@ -69,10 +69,33 @@ export async function validateCouponCode({ code, coachingType, planType, duratio
 // two near-simultaneous redemptions could both read the same used_count and
 // under-count usage. Falls back to the old read-then-write path only if the
 // RPC function hasn't been created yet in Supabase (see SQL migration).
+//
+// NOTE on max_uses: validateCouponCode() checks the cap once, at
+// checkout-start — well before payment. Two customers who both start
+// checkout with the same limited-use code inside that window can both pass
+// that check, both pay, and both land here. The re-check below (against a
+// freshly-read row) can't fully close that race either — two redemptions
+// finalizing at the truly same instant can still both read used_count
+// before either writes — but it shrinks the exploitable window from
+// "anytime during checkout" (which can be minutes) down to "two payments
+// completing within the same instant", and stops a coupon from being
+// oversold *further* once it's already at its cap. A fully atomic fix needs
+// increment_coupon_usage itself to do a conditional
+// `UPDATE ... WHERE used_count < max_uses` and report back whether the cap
+// was already hit — that lives in Supabase, not this repo, so it isn't
+// something this fix can reach.
 export async function incrementCouponUsage(code) {
     const supabase = getSupabaseAdmin();
     const coupon = await findCouponByCode(code);
     if (!coupon) return;
+
+    if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) {
+        console.error(
+            `[couponService] coupon "${code}" already at its usage cap (${coupon.used_count}/${coupon.max_uses}) at ` +
+            `finalize time — payment succeeded but usage was NOT incremented further. Flag for manual review.`
+        );
+        return;
+    }
 
     const { error: rpcError } = await supabase.rpc('increment_coupon_usage', { coupon_id: coupon.id });
 
