@@ -28,7 +28,7 @@ export function requireAdminAuth(req, res, next) {
     }
 
     try {
-        const payload = jwt.verify(token, secret);
+        const payload = jwt.verify(token, secret, { algorithms: ['HS256'] });
         req.admin = {
             id: payload.sub,
             username: payload.username,
