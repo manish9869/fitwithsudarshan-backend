@@ -6,12 +6,30 @@ import { config } from '../config/env.js';
 import logger from '../config/logger.js';
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
+// Origins are compared with the leading "www." stripped so ALLOWED_ORIGINS
+// only needs one form of the domain — an exact-match list previously meant
+// listing just the apex (or just www) silently locked out the other,
+// breaking every /api/content/* request (and the CORS preflight error this
+// produces in the browser gives no hint that it's a www/apex mismatch).
+function stripWww(origin) {
+    try {
+        const url = new URL(origin);
+        url.hostname = url.hostname.replace(/^www\./, '');
+        return url.origin;
+    } catch {
+        return origin;
+    }
+}
+
 export const corsMiddleware = cors({
     origin: (origin, callback) => {
         // Allow no-origin requests in dev (curl, Postman)
         if (!origin) return callback(null, !config.isProd);
 
-        if (!config.allowedOrigins.length || config.allowedOrigins.includes(origin)) {
+        if (!config.allowedOrigins.length) return callback(null, true);
+
+        const normalized = stripWww(origin);
+        if (config.allowedOrigins.some((allowed) => stripWww(allowed) === normalized)) {
             return callback(null, true);
         }
 
