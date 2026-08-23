@@ -104,7 +104,7 @@ export async function getAnalyticsOverview(days = 30) {
     const cached = _cache.get(days);
     if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.data;
 
-    const client = getGaClient();
+    const client = await getGaClient();
     const property = ga4PropertyPath();
     const dateRange = [{ startDate: `${days}daysAgo`, endDate: 'today' }];
 
