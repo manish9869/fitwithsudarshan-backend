@@ -1,7 +1,3 @@
-import puppeteer from 'puppeteer';
-import puppeteerCore from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
-
 const PDF_RUNTIME = process.env.PDF_RUNTIME || 'local';
 
 // ── Singleton browser — reused across warm invocations on the same instance ──
@@ -10,8 +6,23 @@ const PDF_RUNTIME = process.env.PDF_RUNTIME || 'local';
 // same invocation (e.g. bulk email jobs or retry logic).
 let _browser = null;
 
+// puppeteer/puppeteer-core/@sparticuz/chromium are imported dynamically
+// below instead of at module top-level. This module sits at the end of an
+// import chain that every route pulls in eagerly (app.js -> routes/payment.js
+// -> paymentController.js -> invoiceService.js -> here), so a top-level
+// import here loaded all three packages — including the Lambda-packaged
+// Chromium binary — on every cold start of the function, even for requests
+// that never touch a PDF (e.g. the public /api/content/all landing-page
+// fetch every visitor's first load depends on). That was adding several
+// seconds of pure module-load overhead to every cold hit across the whole
+// API, not just the invoice/receipt routes that actually need it.
 async function createBrowser() {
     if (PDF_RUNTIME === 'vercel') {
+        const [{ default: puppeteerCore }, { default: chromium }] = await Promise.all([
+            import('puppeteer-core'),
+            import('@sparticuz/chromium'),
+        ]);
+
         return puppeteerCore.launch({
             args: [
                 ...chromium.args,
@@ -26,6 +37,8 @@ async function createBrowser() {
             headless: chromium.headless,
         });
     }
+
+    const { default: puppeteer } = await import('puppeteer');
 
     return puppeteer.launch({
         headless: 'new',
