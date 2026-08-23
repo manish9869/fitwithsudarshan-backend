@@ -12,33 +12,11 @@
  *   SUPABASE_SECRET_KEY=sb_secret_...
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
-import ws from 'ws';
 import { toTitleCase } from '../utils/textFormat.js';
+import { getSupabaseAdmin } from '../utils/supabaseAdmin.js';
 const BUCKET = 'assessments';
 const SIGNED_URL_EXPIRY_SECONDS = 60 * 60 * 24 * 7; // 7 days
-
-let _supabase = null;
-
-function getSupabase() {
-    if (_supabase) return _supabase;
-
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_SECRET_KEY;
-
-    if (!url || !key) {
-        throw new Error(
-            '[assessmentService] Missing SUPABASE_URL or SUPABASE_SECRET_KEY env vars.'
-        );
-    }
-
-    _supabase = createClient(url, key, {
-        auth: { persistSession: false },
-        realtime: { transport: ws },
-    });
-    return _supabase;
-}
 
 /**
  * Upload a single file buffer to the assessments bucket.
@@ -74,7 +52,7 @@ async function uploadFile(supabase, file, assessmentId, label) {
  * @returns {Promise<{ id: string, row: object }>}
  */
 export async function submitAssessment(fields, files = {}) {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     const assessmentId = randomUUID();
 
     // Upload files first — if one fails we haven't written a partial DB row yet
@@ -146,7 +124,7 @@ export async function submitAssessment(fields, files = {}) {
 export async function getSignedFileUrl(path) {
     if (!path) return null;
 
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.storage
         .from(BUCKET)
         .createSignedUrl(path, SIGNED_URL_EXPIRY_SECONDS);
@@ -177,7 +155,7 @@ export async function getSignedFileUrls({ photo_front_path, photo_side_path, blo
  */
 export async function getAssessmentByUploadToken(token) {
     if (!token) return null;
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
         .from('assessments')
@@ -208,7 +186,7 @@ export async function uploadPhotosByToken(token, files = {}) {
         throw err;
     }
 
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     const updates = {};
 
     if (files.photoFront) {
