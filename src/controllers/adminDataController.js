@@ -703,6 +703,9 @@ export async function getDashboard(req, res) {
             { count: totalAssessments, error: e4 },
             { data: dietPlansInRangeRows, error: e6 },
             { count: totalDietPlans, error: e7 },
+            { data: leadsInRangeRows, error: e8 },
+            { count: totalLeads, error: e9 },
+            { count: newLeadsCount, error: e10 },
         ] = await Promise.all([
 
             supabase
@@ -728,9 +731,21 @@ export async function getDashboard(req, res) {
                 .select('id, enrollment_id, created_at')
                 .gte('created_at', since),
             supabase.from('diet_plans').select('id', { count: 'exact', head: true }),
+            supabase
+                .from('leads')
+                .select('id, name, goal, status, created_at')
+                .is('deleted_at', null)
+                .gte('created_at', since)
+                .order('created_at', { ascending: true }),
+            supabase.from('leads').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+            // Not range-scoped, same reasoning as followUpsDue/pendingReviewCount
+            // below — "leads I still haven't touched" is a standing to-do, not
+            // something that should disappear just because the range picker
+            // moved past when they came in.
+            supabase.from('leads').select('id', { count: 'exact', head: true }).is('deleted_at', null).eq('status', 'new'),
         ]);
 
-        if (e1 || e2 || e3 || e4 || e6 || e7) throw (e1 || e2 || e3 || e4 || e6 || e7);
+        if (e1 || e2 || e3 || e4 || e6 || e7 || e8 || e9 || e10) throw (e1 || e2 || e3 || e4 || e6 || e7 || e8 || e9 || e10);
 
         // Outstanding balance — excludes never-completed website checkouts
         // (pending, failed, or refunded — none represent money genuinely
@@ -916,6 +931,14 @@ export async function getDashboard(req, res) {
         const reviewedCount = (assessments || []).filter((a) => a.reviewed).length;
         const pendingReviewCount = (assessments || []).length - reviewedCount;
 
+        // ── Lead status funnel (cold enquiries — "Apply For Coaching" modal) ─
+        const leadStatusCounts = {};
+        (leadsInRangeRows || []).forEach((l) => {
+            const k = l.status || 'new';
+            leadStatusCounts[k] = (leadStatusCounts[k] || 0) + 1;
+        });
+        const leadStatusSplit = Object.entries(leadStatusCounts).map(([name, value]) => ({ name, value }));
+
         // ── Recent activity feed (mixed enrollments + assessments) ──────────
         const recentEnrollments = (enrollments || [])
             .slice(-8)
@@ -938,7 +961,17 @@ export async function getDashboard(req, res) {
                 subtitle: a.plan || '',
                 timestamp: a.created_at,
             }));
-        const recentActivity = [...recentEnrollments, ...recentAssessments]
+        const recentLeads = (leadsInRangeRows || [])
+            .slice(-8)
+            .reverse()
+            .map((l) => ({
+                type: 'lead',
+                id: l.id,
+                title: l.name || 'Unknown',
+                subtitle: l.goal || 'New enquiry',
+                timestamp: l.created_at,
+            }));
+        const recentActivity = [...recentEnrollments, ...recentAssessments, ...recentLeads]
             .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
             .slice(0, 10);
 
@@ -967,9 +1000,13 @@ export async function getDashboard(req, res) {
                 renewedInRange,
                 renewedAllTime,
                 endingSoonCount: endingSoonAll.length,
+                leadsInRange: (leadsInRangeRows || []).length,
+                totalLeadsAllTime: totalLeads || 0,
+                newLeadsCount: newLeadsCount || 0,
             },
             charts: {
                 revenueTrend,
+                leadStatusSplit,
                 coachingTypeSplit,
                 planTypeSplit,
                 durationSplit,
