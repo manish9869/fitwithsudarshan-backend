@@ -252,8 +252,17 @@ create table if not exists admin_notes (
   note text not null,
   created_by uuid references admins(id),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint admin_notes_record_type_check check (record_type in ('enrollment', 'assessment', 'lead'))
 );
+
+-- Pre-existing production databases already have this table (created before
+-- `leads` existed) with the CHECK constraint scoped to just 'enrollment' and
+-- 'assessment' — the `create table if not exists` above is a no-op there, so
+-- the constraint has to be widened explicitly. Idempotent: safe to re-run.
+alter table admin_notes drop constraint if exists admin_notes_record_type_check;
+alter table admin_notes add constraint admin_notes_record_type_check
+  check (record_type in ('enrollment', 'assessment', 'lead'));
 
 create index if not exists idx_admin_notes_record on admin_notes(record_type, record_id);
 
