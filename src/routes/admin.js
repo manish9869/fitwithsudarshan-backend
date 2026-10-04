@@ -57,6 +57,8 @@ import {
     putLegalPageHandler,
 } from '../controllers/adminContentController.js';
 
+import * as wa from '../controllers/whatsappController.js';
+
 const router = Router();
 
 const upload = multer({
@@ -166,5 +168,39 @@ router.patch('/content/:table/:id', updateTableRow);
 router.delete('/content/:table/:id', deleteTableRow);
 
 router.post('/upload', upload.single('file'), uploadImage);
+
+// ── WhatsApp marketing (contacts, groups, broadcasts, day-wise sequences) ──
+router.get('/whatsapp/status', wa.getStatus);
+router.get('/whatsapp/contacts', wa.listContacts);
+router.get('/whatsapp/tags', wa.listTags);
+router.post('/whatsapp/contacts', wa.createContact);
+router.post('/whatsapp/contacts/import', wa.importContacts);
+router.post('/whatsapp/contacts/sync', wa.runSync);
+router.patch('/whatsapp/contacts/:id', wa.updateContact);
+router.delete('/whatsapp/contacts/:id', wa.deleteContact);
+router.get('/whatsapp/groups', wa.listGroups);
+router.post('/whatsapp/groups', wa.createGroup);
+router.patch('/whatsapp/groups/:id', wa.updateGroup);
+router.delete('/whatsapp/groups/:id', wa.deleteGroup);
+router.post('/whatsapp/groups/:id/members', wa.addGroupMembers);
+router.delete('/whatsapp/groups/:id/members', wa.removeGroupMembers);
+router.post('/whatsapp/audience/preview', wa.previewAudience);
+router.get('/whatsapp/campaigns', wa.listCampaigns);
+router.post('/whatsapp/campaigns', wa.createCampaign);
+router.put('/whatsapp/campaigns/:id', wa.updateCampaign);
+router.delete('/whatsapp/campaigns/:id', wa.deleteCampaign);
+router.post('/whatsapp/campaigns/:id/launch', wa.launchCampaign);
+router.post('/whatsapp/campaigns/:id/cancel', wa.cancelCampaign);
+router.get('/whatsapp/sequences', wa.listSequences);
+router.post('/whatsapp/sequences', wa.createSequence);
+router.put('/whatsapp/sequences/:id', wa.updateSequence);
+router.patch('/whatsapp/sequences/:id/active', wa.toggleSequence);
+router.delete('/whatsapp/sequences/:id', wa.deleteSequence);
+router.get('/whatsapp/sequences/:id/preview', wa.getSequencePreview);
+router.get('/whatsapp/queue', wa.listQueue);
+router.post('/whatsapp/queue/build', wa.runBuildQueue);
+router.post('/whatsapp/queue/dispatch', wa.runDispatch);
+router.post('/whatsapp/queue/skip', wa.bulkSkipQueue);
+router.patch('/whatsapp/queue/:id', wa.updateQueueItem);
 
 export default router;

@@ -56,6 +56,7 @@ const SITE_KEYS = [
     'pricing_popular_flags',
     'maintenance',
     'section_visibility',
+    'promo_popup',
     'logging',
     'diet_units',
     'diet_guidelines',
@@ -416,6 +417,7 @@ export async function getPublicContent() {
         popularFlags,
         maintenance,
         sectionVisibility,
+        promoPopup,
         coachingTypes,
         durationsRows,
         pricingRows,
@@ -444,6 +446,7 @@ export async function getPublicContent() {
         getSiteContent('pricing_popular_flags'),
         getSiteContent('maintenance'),
         getSiteContent('section_visibility'),
+        getSiteContent('promo_popup'),
 
         listRows('coaching_types'),
         listRows('durations'),
@@ -501,6 +504,7 @@ export async function getPublicContent() {
         popularFlags: popularFlagsMapped,
         maintenance: maintenance || { enabled: false },
         sectionVisibility: sectionVisibility || {},
+        promoPopup: promoPopup || { enabled: false },
 
         coachingTypes: coachingTypes
             .filter((c) => c.active)

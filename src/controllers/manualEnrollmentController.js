@@ -501,7 +501,9 @@ export async function searchEnrollmentsByContact(req, res) {
         const q = (req.query.query || '').trim();
         if (!q) return res.json({ rows: [] });
         const supabase = getSupabaseAdmin();
-        const s = q.replace(/[%,]/g, '');
+        // Strip PostgREST .or() syntax characters — parentheses as well as
+        // commas, or a query like "Rahul (gym)" breaks the filter and 500s.
+        const s = q.replace(/[%,()]/g, '');
         const { data, error } = await supabase
             .from('enrollments')
             .select('*')

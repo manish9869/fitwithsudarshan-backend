@@ -14,6 +14,7 @@ import { notFound, errorHandler } from './middleware/errorHandler.js';
 import paymentRoutes from './routes/payment.js';
 import adminRoutes from './routes/admin.js';
 import contentRoutes from './routes/content.js';
+import { cronWhatsApp } from './controllers/whatsappController.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -38,7 +39,8 @@ app.use(compressionMiddleware);
 app.use((req, res, next) => {
     if (req.originalUrl === '/api/webhooks/razorpay') return next();
     const needsHigherLimit = req.originalUrl.startsWith('/api/admin/diet-plans')
-        || req.originalUrl.startsWith('/api/admin/content');
+        || req.originalUrl.startsWith('/api/admin/content')
+        || req.originalUrl.startsWith('/api/admin/whatsapp'); // bulk contact import
     const limit = needsHigherLimit ? '2mb' : '10kb';
     express.json({ limit })(req, res, next);
 });
@@ -52,6 +54,9 @@ app.use(requestLogger);
 app.use('/api', paymentRoutes);
 app.use('/api', contentRoutes);
 app.use('/api/admin', adminRoutes);
+
+// Vercel Cron (see vercel.json) — authenticated by CRON_SECRET, not admin JWT.
+app.get('/api/cron/whatsapp', cronWhatsApp);
 
 app.use(notFound);
 app.use(errorHandler);
