@@ -452,7 +452,7 @@ export const listQueue = handle(async (req) => {
             ...m,
             source: m.wa_campaigns?.name
                 ? `Broadcast · ${m.wa_campaigns.name}`
-                : m.wa_sequences?.name ? `${m.wa_sequences.name} · Day ${m.wa_sequence_steps?.day_number ?? '?'}` : 'Message',
+                : m.wa_sequences?.name ? `${m.wa_sequences.name} · Day ${m.wa_sequence_steps?.day_number ?? '?'}` : 'Direct message',
             wa_campaigns: undefined, wa_sequences: undefined, wa_sequence_steps: undefined,
         })),
     };
@@ -478,7 +478,43 @@ export const bulkSkipQueue = handle(async (req) => {
     return { skipped: ids.length };
 });
 
-export const runDispatch = handle(async () => dispatchPending({ limit: 25 }));
+export const runDispatch = handle(async (req) => dispatchPending({ limit: 25, ids: uuidList(req.body?.ids) }));
+
+/**
+ * Direct message: one personalised message to chosen contacts and/or groups,
+ * without creating a broadcast. Rows go into wa_messages (no campaign/step)
+ * so they're logged and show up in the queue's Sent history. Returned rows
+ * are sent by hand from the modal, or via dispatch with their ids.
+ */
+export const createDirectMessages = handle(async (req) => {
+    const msg = cleanMessage(req.body);
+    const contacts = await resolveAudience({
+        contactIds: uuidList(req.body.contactIds),
+        groupIds: uuidList(req.body.groupIds),
+    });
+    if (!contacts.length) throw bad('No one to message. They may have stopped messages, or the group is empty.');
+    if (contacts.length > 1000) throw bad('That is over 1,000 people. Use a broadcast for large audiences.');
+    const day = todayIST();
+    const rows = contacts.map((c) => ({
+        contact_id: c.id,
+        phone: c.phone,
+        name: c.name,
+        body: personalize(msg.body, c),
+        image_url: msg.image_url,
+        cta_label: msg.cta_label,
+        cta_url: msg.cta_url,
+        meta_template_name: msg.meta_template_name,
+        meta_template_lang: msg.meta_template_lang,
+        scheduled_date: day,
+    }));
+    const created = [];
+    for (let i = 0; i < rows.length; i += 500) {
+        const { data, error } = await db().from('wa_messages').insert(rows.slice(i, i + 500)).select();
+        if (error) throw error;
+        created.push(...(data || []));
+    }
+    return { messages: created, apiConfigured: apiConfigured() };
+});
 
 // ── Cron (Vercel) ─────────────────────────────────────────────────────────
 

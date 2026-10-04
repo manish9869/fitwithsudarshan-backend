@@ -373,17 +373,21 @@ async function sendViaCloudApi(msg) {
  * Cloud API. Kept small per call so it fits inside a 30s serverless
  * function — the admin "Send all" button calls it repeatedly until done.
  */
-export async function dispatchPending({ limit = 25 } = {}) {
+export async function dispatchPending({ limit = 25, ids } = {}) {
     if (!apiConfigured()) {
         const err = new Error('Automatic sending is not connected. Add WA_CLOUD_TOKEN and WA_PHONE_NUMBER_ID to the backend environment, or send from the queue by hand.');
         err.status = 400;
         throw err;
     }
     const supabase = getSupabaseAdmin();
-    const { data: batch, error } = await supabase.from('wa_messages')
+    // `ids` restricts sending to specific messages (direct messages), so
+    // "send these 5" never also fires unrelated pending queue items.
+    let q = supabase.from('wa_messages')
         .select('*')
         .eq('status', 'pending')
-        .lte('scheduled_date', todayIST())
+        .lte('scheduled_date', todayIST());
+    if (ids?.length) q = q.in('id', ids);
+    const { data: batch, error } = await q
         .order('created_at', { ascending: true })
         .limit(limit);
     if (error) throw error;
@@ -404,10 +408,12 @@ export async function dispatchPending({ limit = 25 } = {}) {
         }
     }
 
-    const { count } = await supabase.from('wa_messages')
+    let rq = supabase.from('wa_messages')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'pending')
         .lte('scheduled_date', todayIST());
+    if (ids?.length) rq = rq.in('id', ids);
+    const { count } = await rq;
 
     return { sent, failed, remaining: count || 0 };
 }

@@ -200,6 +200,7 @@ router.get('/whatsapp/sequences/:id/preview', wa.getSequencePreview);
 router.get('/whatsapp/queue', wa.listQueue);
 router.post('/whatsapp/queue/build', wa.runBuildQueue);
 router.post('/whatsapp/queue/dispatch', wa.runDispatch);
+router.post('/whatsapp/direct', wa.createDirectMessages);
 router.post('/whatsapp/queue/skip', wa.bulkSkipQueue);
 router.patch('/whatsapp/queue/:id', wa.updateQueueItem);
 
