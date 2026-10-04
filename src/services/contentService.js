@@ -57,6 +57,7 @@ const SITE_KEYS = [
     'maintenance',
     'section_visibility',
     'promo_popup',
+    'wa_templates', // admin-only: coach's saved WhatsApp templates (not in the public bundle)
     'logging',
     'diet_units',
     'diet_guidelines',
